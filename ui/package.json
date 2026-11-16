@@ -1,27 +1,35 @@
 {
-  "name": "webkiln-ui",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "next": "16.4.6",
-    "react": "19.3.0",
-    "react-dom": "19.3.0"
-  },
-  "devDependencies": {
-    "@tailwindcss/turbopack": "4.3.3",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.4.6",
-    "tailwindcss": "4.3.3",
-    "typescript": "^5"
-  },
-  "packageManager": "pnpm@12.4.1"
+    "name": "webkiln-ui",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "build": "next build",
+        "dev": "next dev",
+        "format": "prettier --write .",
+        "knip": "knip",
+        "lint": "eslint",
+        "start": "next start"
+    },
+    "dependencies": {
+        "next": "16.4.6",
+        "react": "19.3.0",
+        "react-dom": "19.3.0"
+    },
+    "devDependencies": {
+        "@prettier/plugin-xml": "^3.4.2",
+        "@tailwindcss/turbopack": "4.3.3",
+        "@types/node": "^20",
+        "@types/react": "^19",
+        "@types/react-dom": "^19",
+        "eslint": "^9",
+        "eslint-config-next": "16.4.6",
+        "knip": "^6.45.1",
+        "prettier": "3.10.1",
+        "prettier-plugin-organize-imports": "^4.3.0",
+        "prettier-plugin-packagejson": "^3.1.0",
+        "prettier-plugin-tailwindcss": "^0.8.1",
+        "tailwindcss": "4.3.3",
+        "typescript": "^5"
+    },
+    "packageManager": "pnpm@12.4.1"
 }
