@@ -1,0 +1,27 @@
+repos:
+  - repo: builtin
+    hooks:
+      # Whitespace and file hygiene
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      # Repository safety
+      - id: check-added-large-files
+        args: [--maxkb=2048]
+      - id: check-case-conflict
+      - id: check-illegal-windows-names
+      - id: check-merge-conflict
+      - id: detect-private-key
+      # File validation
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml
+        exclude: '(^|/)pnpm-lock\.yaml$'
+      # Script validation
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+  - repo: https://github.com/google/yamlfmt
+    rev: v0.21.0
+    hooks:
+      - id: yamlfmt
+        exclude: '(^|/)pnpm-lock\.yaml$'

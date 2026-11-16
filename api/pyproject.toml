@@ -1,17 +1,61 @@
+[build-system]
+build-backend = "uv_build"
+requires = [ "uv-build>=0.13.8,<0.14" ]
+
 [project]
 name = "webkiln-api"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-authors = [
-    { name = "frost23z", email = "80541095+frost23z@users.noreply.github.com" }
-]
+authors = [ { name = "frost23z", email = "80541095+frost23z@users.noreply.github.com" } ]
 requires-python = ">=3.14"
+classifiers = [
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
+]
 dependencies = []
+scripts.webkiln-api = "webkiln_api:main"
 
-[project.scripts]
-webkiln-api = "webkiln_api:main"
+[dependency-groups]
+dev = [
+  "pyrefly>=1.4.1",
+  "pytest>=9.2",
+]
 
-[build-system]
-requires = ["uv_build>=0.13.8,<0.14.0"]
-build-backend = "uv_build"
+[tool.ruff]
+line-length = 100
+lint.select = [
+  "ASYNC", # Async-related checks
+  "B",     # Bugbear
+  "C4",    # Comprehension improvements
+  "DTZ",   # Datetime timezone awareness
+  "E",     # pycodestyle errors
+  "F",     # Pyflakes
+  "FAST",  # FastAPI-specific checks
+  "G",     # Logging format
+  "I",     # Import sorting
+  "LOG",   # Logging best practices
+  "PERF",  # Performance
+  "PIE",   # Miscellaneous improvements
+  "PT",    # pytest best practices
+  "PTH",   # pathlib
+  "RUF",   # Ruff-specific rules
+  "S",     # Bandit security checks
+  "SIM",   # Simplification
+  "T20",   # Prevent accidental print statements
+  "TRY",   # Exception handling
+  "UP",    # Python modernization
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [ "S101", "S105", "S106" ]
+
+[tool.pyrefly]
+project-includes = [
+  "**/*.py*",
+  "**/*.pyi",
+]
+
+[tool.pytest]
+pythonpath = [ "." ]
