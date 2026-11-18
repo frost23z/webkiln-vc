@@ -14,7 +14,10 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: 3.15",
 ]
-dependencies = []
+dependencies = [
+  "pydantic>=2.14.3",
+  "pydantic-settings>=2.16.3",
+]
 scripts.webkiln-api = "webkiln_api:main"
 
 [dependency-groups]
