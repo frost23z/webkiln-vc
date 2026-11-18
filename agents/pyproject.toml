@@ -1,0 +1,21 @@
+[build-system]
+build-backend = "uv_build"
+requires = [ "uv-build>=0.13.8,<0.14" ]
+
+[project]
+name = "webkiln-agents"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [ { name = "frost23z", email = "80541095+frost23z@users.noreply.github.com" } ]
+requires-python = ">=3.14"
+classifiers = [
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
+]
+dependencies = [
+  "pydantic>=2.14.3",
+  "pydantic-settings>=2.16.3",
+]
+scripts.webkiln-agents = "webkiln_agents:main"

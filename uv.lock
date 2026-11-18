@@ -2,6 +2,13 @@ version = 1
 revision = 5
 requires-python = ">=3.14"
 
+[manifest]
+members = [
+    "webkiln",
+    "webkiln-agents",
+    "webkiln-api",
+]
+
 [[package]]
 name = "annotated-types"
 version = "0.8.0"
@@ -224,13 +231,9 @@ wheels = [
 ]
 
 [[package]]
-name = "webkiln-api"
+name = "webkiln"
 version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-]
+source = { virtual = "." }
 
 [package.dev-dependencies]
 dev = [
@@ -239,13 +242,29 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "pydantic", specifier = ">=2.14.3" },
-    { name = "pydantic-settings", specifier = ">=2.16.3" },
-]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "pyrefly", specifier = ">=1.4.1" },
     { name = "pytest", specifier = ">=9.2" },
 ]
+
+[[package]]
+name = "webkiln-agents"
+version = "0.1.0"
+source = { editable = "agents" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.14.3" },
+    { name = "pydantic-settings", specifier = ">=2.16.3" },
+]
+
+[[package]]
+name = "webkiln-api"
+version = "0.1.0"
+source = { editable = "api" }
