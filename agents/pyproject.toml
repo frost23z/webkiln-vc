@@ -15,7 +15,17 @@ classifiers = [
   "Programming Language :: Python :: 3.15",
 ]
 dependencies = [
+  "langchain-google-genai>=4.5.2",
+  "langchain-groq>=1.2.1",
+  "langchain-huggingface>=1.2.3",
+  "langchain-openrouter>=0.3",
+  "langgraph>=1.2.22",
   "pydantic>=2.14.3",
   "pydantic-settings>=2.16.3",
 ]
 scripts.webkiln-agents = "webkiln_agents:main"
+
+[dependency-groups]
+dev = [
+  "langgraph-cli[inmem]>=0.4.43",
+]
