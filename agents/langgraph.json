@@ -1,0 +1,5 @@
+{
+  "dependencies": ["."],
+  "graphs": { "webkiln-manager": "./src/webkiln_agents/manager/graph.py:graph" },
+  "env": ".env"
+}

@@ -1,0 +1,23 @@
+# https://docs.langchain.com/oss/python/langgraph/graph-api-state#define-input-and-output-schemas
+
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.state import CompiledStateGraph
+
+from webkiln_agents.core.schemas import Input
+from webkiln_agents.manager.nodes import process_initial_input
+from webkiln_agents.manager.state import State
+
+
+def build_graph() -> CompiledStateGraph[State, None, Input, State]:
+    # Invalid input raises ValidationError which breaks the thread.
+    builder = StateGraph(State, input_schema=Input)
+
+    builder.add_node("process_initial_input", process_initial_input)
+
+    builder.add_edge(START, "process_initial_input")
+    builder.add_edge("process_initial_input", END)
+
+    return builder.compile()
+
+
+graph = build_graph()
