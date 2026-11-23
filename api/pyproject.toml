@@ -14,5 +14,11 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: 3.15",
 ]
-dependencies = []
+dependencies = [
+  "fastapi[standard-no-fastapi-cloud-cli]>=0.165",
+  "webkiln-agents",
+]
 scripts.webkiln-api = "webkiln_api:main"
+
+[tool.uv]
+sources.webkiln-agents = { workspace = true }
