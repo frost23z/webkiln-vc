@@ -2,6 +2,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from langgraph.checkpoint.memory import InMemorySaver
 from webkiln_agents.manager.graph import build_graph
 
 from webkiln_api.runs import RunRecord, router
@@ -9,7 +10,7 @@ from webkiln_api.runs import RunRecord, router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    app.state.graph = build_graph()  # Compile once at startup
+    app.state.graph = build_graph(checkpointer=InMemorySaver())  # Compile once at startup
     app.state.runs = dict[str, RunRecord]()
     yield
 
