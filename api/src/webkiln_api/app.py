@@ -5,7 +5,8 @@ from fastapi import FastAPI
 from langgraph.checkpoint.memory import InMemorySaver
 from webkiln_agents.manager.graph import build_graph
 
-from webkiln_api.runs import RunRecord, router
+from webkiln_api.models import RunRecord
+from webkiln_api.runs import router
 
 
 @asynccontextmanager

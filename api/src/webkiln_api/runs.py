@@ -1,32 +1,11 @@
-from typing import Any, Literal
 from uuid import uuid7
 
 from fastapi import APIRouter, HTTPException, Request
-from langchain_core.runnables import RunnableConfig
-from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
 from webkiln_agents.core.schemas import Input
 from webkiln_agents.manager.state import State
 
-
-class RunRecord(BaseModel):
-    brief: Input
-    status: Literal["created", "running", "completed", "failed"] = "created"
-
-
-class RunResponse(BaseModel):
-    thread_id: str
-    status: str
-
-
-class RunDetail(RunResponse):
-    brief: Input
-    state: dict[str, Any] | None  # None until the run has started
-
-
-def thread_config(thread_id: str) -> RunnableConfig:
-    return {"configurable": {"thread_id": thread_id}}
-
+from webkiln_api.models import RunDetail, RunRecord, RunResponse, thread_config
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
