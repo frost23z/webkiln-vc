@@ -22,3 +22,6 @@ scripts.webkiln-api = "webkiln_api:main"
 
 [tool.uv]
 sources.webkiln-agents = { workspace = true }
+
+[tool.fastapi]
+entrypoint = "webkiln_api.main:app"
