@@ -1,11 +1,21 @@
 'use client'
 
-import { ApiError, getRun, startRun, streamRun, type Brief, type RunDetail } from '@/lib/api'
-import { describeEvent } from '@/lib/progress'
+import {
+    ApiError,
+    getRun,
+    startRun,
+    streamRun,
+    type Brief,
+    type RunDetail,
+    type RunStatus,
+} from '@/lib/api'
+import { describeEvent, finishedNodes } from '@/lib/progress'
+import { bannerFor, doneStatus } from '@/lib/status'
 import { clearThreadId, readThreadId, saveThreadId } from '@/lib/thread'
 import { useEffect, useRef, useState } from 'react'
 import { BriefForm } from './brief-form'
 import { ProgressLines } from './progress-lines'
+import { StatusBanner } from './status-banner'
 
 /** The message of an API error plus its field details, or a generic text for anything else. */
 function errorText(err: unknown): string {
@@ -17,8 +27,11 @@ function errorText(err: unknown): string {
 export function Workspace() {
     const [run, setRun] = useState<RunDetail | null>(null)
     const [error, setError] = useState<string | null>(null)
-    // One text line per event received so far.
     const [lines, setLines] = useState<string[]>([])
+    // The last node that finished. The banner turns it into a phase name.
+    const [node, setNode] = useState<string | null>(null)
+    // The live status. `run.status` only changes when the run is loaded again.
+    const [status, setStatus] = useState<RunStatus | null>(null)
     // Lets "New run" stop a stream that is still open.
     const streamAbort = useRef<AbortController | null>(null)
     // True until the saved thread id has been looked up, so the form does not flash on refresh.
@@ -36,7 +49,9 @@ export function Workspace() {
         let cancelled = false
         getRun(threadId)
             .then((saved) => {
-                if (!cancelled) setRun(saved)
+                if (cancelled) return
+                setRun(saved)
+                setStatus(saved.status)
             })
             .catch((err) => {
                 if (cancelled) return
@@ -58,6 +73,8 @@ export function Workspace() {
     async function submit(brief: Brief) {
         setError(null)
         setLines([])
+        setNode(null)
+        setStatus(null)
         setStarting(true)
         const abort = new AbortController()
         streamAbort.current = abort
@@ -66,13 +83,19 @@ export function Workspace() {
             saveThreadId(thread_id)
             setRun(await getRun(thread_id))
             setStarting(false)
+            setStatus('running')
             for await (const event of streamRun(thread_id, abort.signal)) {
                 const line = describeEvent(event)
                 if (line) setLines((current) => [...current, line])
+                const last = finishedNodes(event).at(-1)
+                if (last) setNode(last)
+                const final = doneStatus(event)
+                if (final) setStatus(final)
             }
             setRun(await getRun(thread_id)) // the state after the run
         } catch (err) {
             if (abort.signal.aborted) return // the user started a new run
+            setStatus((current) => (current === 'running' ? 'failed' : current))
             setError(errorText(err))
         } finally {
             setStarting(false)
@@ -85,6 +108,8 @@ export function Workspace() {
         setRun(null)
         setError(null)
         setLines([])
+        setNode(null)
+        setStatus(null)
     }
 
     if (restoring) {
@@ -116,6 +141,7 @@ export function Workspace() {
                     {error}
                 </p>
             )}
+            {status && <StatusBanner banner={bannerFor(status, node)} />}
             <ProgressLines lines={lines} />
             {run && (
                 <pre className='overflow-x-auto rounded-md bg-zinc-100 p-4 text-xs dark:bg-zinc-900'>
