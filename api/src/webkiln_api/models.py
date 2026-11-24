@@ -22,6 +22,11 @@ class RunDetail(RunResponse):
     state: dict[str, Any] | None  # None until the run has started
 
 
+class RunSummary(RunResponse):
+    brief: Input
+    updated_at: str  # ISO 8601 time of the run's latest checkpoint
+
+
 def thread_config(thread_id: str) -> RunnableConfig:
     return {"configurable": {"thread_id": thread_id}}
 
