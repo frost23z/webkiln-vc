@@ -1,8 +1,8 @@
 'use client'
 
-import { ApiError, getRun, startRun, type Brief, type RunDetail } from '@/lib/api'
+import { ApiError, getRun, startRun, streamRun, type Brief, type RunDetail } from '@/lib/api'
 import { clearThreadId, readThreadId, saveThreadId } from '@/lib/thread'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BriefForm } from './brief-form'
 
 /** The message of an API error plus its field details, or a generic text for anything else. */
@@ -15,6 +15,10 @@ function errorText(err: unknown): string {
 export function Workspace() {
     const [run, setRun] = useState<RunDetail | null>(null)
     const [error, setError] = useState<string | null>(null)
+    // The names of the events received so far.
+    const [lines, setLines] = useState<string[]>([])
+    // Lets "New run" stop a stream that is still open.
+    const streamAbort = useRef<AbortController | null>(null)
     // True until the saved thread id has been looked up, so the form does not flash on refresh.
     const [restoring, setRestoring] = useState(true)
     // True from pressing the submit button until the run is shown.
@@ -51,12 +55,21 @@ export function Workspace() {
 
     async function submit(brief: Brief) {
         setError(null)
+        setLines([])
         setStarting(true)
+        const abort = new AbortController()
+        streamAbort.current = abort
         try {
             const { thread_id } = await startRun(brief)
             saveThreadId(thread_id)
             setRun(await getRun(thread_id))
+            setStarting(false)
+            for await (const event of streamRun(thread_id, abort.signal)) {
+                setLines((current) => [...current, event.event])
+            }
+            setRun(await getRun(thread_id)) // the state after the run
         } catch (err) {
+            if (abort.signal.aborted) return // the user started a new run
             setError(errorText(err))
         } finally {
             setStarting(false)
@@ -64,9 +77,11 @@ export function Workspace() {
     }
 
     function newRun() {
+        streamAbort.current?.abort()
         clearThreadId()
         setRun(null)
         setError(null)
+        setLines([])
     }
 
     if (restoring) {
@@ -97,6 +112,13 @@ export function Workspace() {
                 >
                     {error}
                 </p>
+            )}
+            {lines.length > 0 && (
+                <ul className='text-sm'>
+                    {lines.map((line, index) => (
+                        <li key={index}>{line}</li>
+                    ))}
+                </ul>
             )}
             {run && (
                 <pre className='overflow-x-auto rounded-md bg-zinc-100 p-4 text-xs dark:bg-zinc-900'>

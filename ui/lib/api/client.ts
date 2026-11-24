@@ -2,6 +2,7 @@ import createClient from 'openapi-fetch'
 import type { paths } from '../generated/schema'
 
 import { ApiError } from './errors'
+import { readEvents, type SseEvent } from './sse'
 import type { Brief, ErrorResponse } from './types'
 
 const baseUrl = process.env.NEXT_PUBLIC_API_URL
@@ -46,4 +47,32 @@ export function getRun(threadId: string) {
             params: { path: { thread_id: threadId } },
         })
     )
+}
+
+/**
+ * Starts the run and yields its server-sent events until the stream ends.
+ * `fetch` is used instead of `EventSource` so the request can be aborted.
+ */
+export async function* streamRun(threadId: string, signal?: AbortSignal): AsyncGenerator<SseEvent> {
+    let response: Response
+    try {
+        response = await fetch(`${baseUrl}/runs/${encodeURIComponent(threadId)}/stream`, {
+            headers: { Accept: 'text/event-stream' },
+            signal,
+        })
+    } catch (err) {
+        if (signal?.aborted) throw err
+        throw new ApiError('network_error', 'Could not reach the API. Is it running?')
+    }
+
+    if (!response.ok || !response.body) {
+        const body = (await response.json().catch(() => null)) as ErrorResponse | null
+        throw new ApiError(
+            body?.error?.code ?? 'unknown_error',
+            body?.error?.message ?? 'The API returned an unexpected response.',
+            body?.error?.details ?? []
+        )
+    }
+
+    yield* readEvents(response.body)
 }
