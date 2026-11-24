@@ -1,9 +1,11 @@
 'use client'
 
 import { ApiError, getRun, startRun, streamRun, type Brief, type RunDetail } from '@/lib/api'
+import { describeEvent } from '@/lib/progress'
 import { clearThreadId, readThreadId, saveThreadId } from '@/lib/thread'
 import { useEffect, useRef, useState } from 'react'
 import { BriefForm } from './brief-form'
+import { ProgressLines } from './progress-lines'
 
 /** The message of an API error plus its field details, or a generic text for anything else. */
 function errorText(err: unknown): string {
@@ -15,7 +17,7 @@ function errorText(err: unknown): string {
 export function Workspace() {
     const [run, setRun] = useState<RunDetail | null>(null)
     const [error, setError] = useState<string | null>(null)
-    // The names of the events received so far.
+    // One text line per event received so far.
     const [lines, setLines] = useState<string[]>([])
     // Lets "New run" stop a stream that is still open.
     const streamAbort = useRef<AbortController | null>(null)
@@ -65,7 +67,8 @@ export function Workspace() {
             setRun(await getRun(thread_id))
             setStarting(false)
             for await (const event of streamRun(thread_id, abort.signal)) {
-                setLines((current) => [...current, event.event])
+                const line = describeEvent(event)
+                if (line) setLines((current) => [...current, line])
             }
             setRun(await getRun(thread_id)) // the state after the run
         } catch (err) {
@@ -113,13 +116,7 @@ export function Workspace() {
                     {error}
                 </p>
             )}
-            {lines.length > 0 && (
-                <ul className='text-sm'>
-                    {lines.map((line, index) => (
-                        <li key={index}>{line}</li>
-                    ))}
-                </ul>
-            )}
+            <ProgressLines lines={lines} />
             {run && (
                 <pre className='overflow-x-auto rounded-md bg-zinc-100 p-4 text-xs dark:bg-zinc-900'>
                     {JSON.stringify(run, null, 2)}
