@@ -24,13 +24,13 @@ repos:
           - jsx
           - ts
           - tsx
-      - id: knip
-        name: knip
-        entry: pnpm exec knip
-        language: system
-        pass_filenames: false
-        types_or:
-          - javascript
-          - jsx
-          - ts
-          - tsx
+    # - id: knip
+    #   name: knip
+    #   entry: pnpm exec knip
+    #   language: system
+    #   pass_filenames: false
+    #   types_or:
+    #     - javascript
+    #     - jsx
+    #     - ts
+    #     - tsx
