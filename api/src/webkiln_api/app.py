@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from langgraph.checkpoint.memory import InMemorySaver
 from webkiln_agents.manager.graph import build_graph
 
+from webkiln_api.errors import register_error_handlers
 from webkiln_api.models import RunRecord
 from webkiln_api.runs import router
 
@@ -23,6 +24,7 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    register_error_handlers(app)
     app.include_router(router)
 
     return app
