@@ -41,6 +41,10 @@ export function startRun(brief: Brief) {
     return call(() => client.POST('/runs', { body: brief }))
 }
 
+export function listRuns() {
+    return call(() => client.GET('/runs'))
+}
+
 export function getRun(threadId: string) {
     return call(() =>
         client.GET('/runs/{thread_id}', {
