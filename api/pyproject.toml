@@ -19,6 +19,7 @@ dependencies = [
   "pydantic-settings>=2.16.3",
   "webkiln-agents",
 ]
+scripts.export-openapi-schema = "webkiln_api.scripts:export_openapi_schema"
 scripts.webkiln-api = "webkiln_api:main"
 
 [tool.uv]

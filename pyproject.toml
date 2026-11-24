@@ -47,6 +47,8 @@ lint.select = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"**/scripts/**.py" = [ "T201" ]
+"**/scripts.py" = [ "T201" ]
 "**/tests/**/*.py" = [ "S101", "S105", "S106" ]
 
 [tool.pyrefly]
