@@ -16,6 +16,7 @@ classifiers = [
 ]
 dependencies = [
   "fastapi[standard-no-fastapi-cloud-cli]>=0.165",
+  "pydantic-settings>=2.16.3",
   "webkiln-agents",
 ]
 scripts.webkiln-api = "webkiln_api:main"

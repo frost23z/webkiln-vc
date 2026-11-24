@@ -2331,12 +2331,14 @@ version = "0.1.0"
 source = { editable = "api" }
 dependencies = [
     { name = "fastapi", extra = ["standard-no-fastapi-cloud-cli"] },
+    { name = "pydantic-settings" },
     { name = "webkiln-agents" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "fastapi", extras = ["standard-no-fastapi-cloud-cli"], specifier = ">=0.165.0" },
+    { name = "fastapi", extras = ["standard-no-fastapi-cloud-cli"], specifier = ">=0.165" },
+    { name = "pydantic-settings", specifier = ">=2.16.3" },
     { name = "webkiln-agents", editable = "agents" },
 ]
 
