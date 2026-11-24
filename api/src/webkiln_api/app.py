@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from webkiln_agents.manager.graph import build_graph
 
 from webkiln_api.config import get_api_settings
@@ -14,9 +14,11 @@ from webkiln_api.runs import router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    app.state.graph = build_graph(checkpointer=InMemorySaver())  # Compile once at startup
     app.state.runs = dict[str, RunRecord]()
-    yield
+    async with AsyncPostgresSaver.from_conn_string(get_api_settings().DB_URL) as saver:
+        await saver.setup()  # creates the checkpoint tables the first time, then does nothing
+        app.state.graph = build_graph(checkpointer=saver)  # Compile once at startup
+        yield
 
 
 def create_app() -> FastAPI:

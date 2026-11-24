@@ -13,6 +13,23 @@ from webkiln_api.streaming import finished_events, run_events
 router = APIRouter(prefix="/runs", tags=["runs"], responses=ERROR_RESPONSES)
 
 
+async def find_record(request: Request, thread_id: str) -> RunRecord | None:
+    """Return the run record, rebuilding it from the saved checkpoint after an API restart.
+
+    A run that was created but never started has no checkpoint, so a restart forgets it.
+    """
+    runs: dict[str, RunRecord] = request.app.state.runs
+    if thread_id in runs:
+        return runs[thread_id]
+    snapshot = await request.app.state.graph.aget_state(thread_config(thread_id))
+    brief = snapshot.values.get("initial_input")
+    if brief is None:
+        return None
+    # Nothing left to run means it finished. A pending step means the old process died mid-run.
+    runs[thread_id] = RunRecord(brief=brief, status="failed" if snapshot.next else "completed")
+    return runs[thread_id]
+
+
 @router.post("", status_code=201)
 async def create_run(brief: Input, request: Request) -> RunResponse:
     thread_id = str(uuid7())
@@ -23,7 +40,7 @@ async def create_run(brief: Input, request: Request) -> RunResponse:
 
 @router.get("/{thread_id}")
 async def get_run(thread_id: str, request: Request) -> RunDetail:
-    record = request.app.state.runs.get(thread_id)
+    record = await find_record(request, thread_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Run not found")
     snapshot = await request.app.state.graph.aget_state(thread_config(thread_id))
@@ -40,7 +57,7 @@ async def get_run(thread_id: str, request: Request) -> RunDetail:
 @router.get("/{thread_id}/stream")
 async def stream_run(thread_id: str, request: Request) -> StreamingResponse:
     """Start the run and stream its progress as server-sent events."""
-    record = request.app.state.runs.get(thread_id)
+    record = await find_record(request, thread_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Run not found")
     if record.status == "running":

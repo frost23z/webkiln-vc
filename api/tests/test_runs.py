@@ -73,10 +73,9 @@ def test_get_run_before_it_starts_has_no_state(client: TestClient) -> None:
     assert body["state"] is None
 
 
-def test_get_run_returns_the_graph_state(app: FastAPI, client: TestClient) -> None:
+def test_get_run_returns_the_graph_state(client: TestClient) -> None:
     thread_id = client.post("/runs", json=BRIEF).json()["thread_id"]
-    # Run the graph directly: the stream route that normally starts a run comes next.
-    app.state.graph.invoke(BRIEF, {"configurable": {"thread_id": thread_id}})
+    client.get(f"/runs/{thread_id}/stream")  # the stream route starts the run
 
     state = client.get(f"/runs/{thread_id}").json()["state"]
 
