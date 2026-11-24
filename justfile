@@ -7,3 +7,9 @@ api:
 ui-types:
   uv run export-openapi-schema
   pnpm --dir ui exec openapi-typescript ../api/openapi.json --o lib/generated/schema.d.ts
+
+db-up:
+  docker compose up -d --wait db
+
+db-down:
+  docker compose down
