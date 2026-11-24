@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# TODO: Ignored to reduce noise. Will remove later.
+lib/generated
