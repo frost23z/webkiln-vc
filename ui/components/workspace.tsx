@@ -3,11 +3,13 @@
 import {
     ApiError,
     getRun,
+    listRuns,
     startRun,
     streamRun,
     type Brief,
     type RunDetail,
     type RunStatus,
+    type RunSummary,
 } from '@/lib/api'
 import { describeEvent, finishedNodes } from '@/lib/progress'
 import { bannerFor, doneStatus } from '@/lib/status'
@@ -15,6 +17,7 @@ import { clearThreadId, readThreadId, saveThreadId } from '@/lib/thread'
 import { useEffect, useRef, useState } from 'react'
 import { BriefForm } from './brief-form'
 import { ProgressLines } from './progress-lines'
+import { RunHistory } from './run-history'
 import { StatusBanner } from './status-banner'
 
 /** The message of an API error plus its field details, or a generic text for anything else. */
@@ -38,6 +41,8 @@ export function Workspace() {
     const [restoring, setRestoring] = useState(true)
     // True from pressing the submit button until the run is shown.
     const [starting, setStarting] = useState(false)
+    // The saved runs, listed under the form.
+    const [history, setHistory] = useState<RunSummary[]>([])
 
     // On page load, show the run saved in this tab, if there is one.
     useEffect(() => {
@@ -56,7 +61,7 @@ export function Workspace() {
             .catch((err) => {
                 if (cancelled) return
                 if (err instanceof ApiError && err.code === 'not_found') {
-                    clearThreadId() // the API forgot this run (runs are in memory)
+                    clearThreadId() // the API has no run with this id
                 } else {
                     // The API may be down only for a moment, so the saved run is kept.
                     setError(`Could not load the saved run. ${errorText(err)}`)
@@ -69,6 +74,35 @@ export function Workspace() {
             cancelled = true
         }
     }, [])
+
+    // Load the saved runs whenever the form is on screen: on page load and after "New run".
+    const formShown = !restoring && run === null
+    useEffect(() => {
+        if (!formShown) return
+        let cancelled = false
+        listRuns()
+            .then((runs) => {
+                if (!cancelled) setHistory(runs)
+            })
+            .catch(() => {
+                // The list is only a shortcut, so the form works without it.
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [formShown])
+
+    async function openRun(threadId: string) {
+        setError(null)
+        try {
+            const saved = await getRun(threadId)
+            saveThreadId(threadId)
+            setRun(saved)
+            setStatus(saved.status)
+        } catch (err) {
+            setError(errorText(err))
+        }
+    }
 
     async function submit(brief: Brief) {
         setError(null)
@@ -131,7 +165,10 @@ export function Workspace() {
                     New run
                 </button>
             ) : (
-                <BriefForm onSubmit={submit} busy={starting} />
+                <>
+                    <BriefForm onSubmit={submit} busy={starting} />
+                    <RunHistory runs={history} onOpen={openRun} />
+                </>
             )}
             {error && (
                 <p
