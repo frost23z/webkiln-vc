@@ -67,7 +67,7 @@ def test_unexpected_exception_returns_json_without_a_traceback() -> None:
 
     assert response.status_code == 500
     assert response.json() == {
-        "error": {"code": "internal_error", "message": "Something went wrong."}
+        "error": {"code": "internal_error", "message": "Internal server error."}
     }
     assert "secret internal detail" not in response.text
     assert "Traceback" not in response.text

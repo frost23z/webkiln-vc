@@ -7,9 +7,10 @@ from webkiln_agents.core.schemas import Input
 from webkiln_agents.manager.state import State
 
 from webkiln_api.models import RunDetail, RunRecord, RunResponse, thread_config
+from webkiln_api.openapi import ERROR_RESPONSES
 from webkiln_api.streaming import finished_events, run_events
 
-router = APIRouter(prefix="/runs", tags=["runs"])
+router = APIRouter(prefix="/runs", tags=["runs"], responses=ERROR_RESPONSES)
 
 
 @router.post("", status_code=201)
