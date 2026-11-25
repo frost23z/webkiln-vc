@@ -4,9 +4,11 @@ from urllib.parse import urlparse
 
 import psycopg
 import pytest
+from alembic import command
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
 from webkiln_api.config import get_api_settings
+from webkiln_api.db import alembic_config
 
 # A separate database, so tests never touch the data of the dev database.
 TEST_DB_URL = os.environ.get(
@@ -31,3 +33,15 @@ def _use_test_database(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     get_api_settings.cache_clear()
     yield
     get_api_settings.cache_clear()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _migrated_test_database(_test_database: None) -> None:
+    """Bring the test database to the latest schema once per session."""
+    os.environ["DB_URL"] = TEST_DB_URL
+    get_api_settings.cache_clear()
+    try:
+        command.upgrade(alembic_config(), "head")
+    finally:
+        del os.environ["DB_URL"]
+        get_api_settings.cache_clear()

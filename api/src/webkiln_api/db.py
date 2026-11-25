@@ -1,3 +1,6 @@
+from pathlib import Path
+
+from alembic.config import Config
 from sqlalchemy import URL, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
@@ -15,3 +18,8 @@ def create_engine() -> AsyncEngine:
 
 def create_session_factory(engine: AsyncEngine) -> async_sessionmaker:
     return async_sessionmaker(engine, expire_on_commit=False)
+
+
+def alembic_config() -> Config:
+    """The Alembic setup that lives next to the package, for running migrations from code."""
+    return Config(str(Path(__file__).parents[2] / "alembic.ini"))

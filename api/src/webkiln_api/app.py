@@ -8,6 +8,7 @@ from webkiln_agents.manager.graph import build_graph
 
 from webkiln_api.checkpoint import serde
 from webkiln_api.config import get_api_settings
+from webkiln_api.db import create_engine, create_session_factory
 from webkiln_api.errors import register_error_handlers
 from webkiln_api.models import RunRecord
 from webkiln_api.runs import router
@@ -19,7 +20,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     async with AsyncPostgresSaver.from_conn_string(get_api_settings().DB_URL, serde=serde) as saver:
         await saver.setup()  # creates the checkpoint tables the first time, then does nothing
         app.state.graph = build_graph(checkpointer=saver)  # Compile once at startup
-        yield
+        engine = create_engine()
+        app.state.sessions = create_session_factory(engine)
+        try:
+            yield
+        finally:
+            await engine.dispose()
 
 
 def create_app() -> FastAPI:

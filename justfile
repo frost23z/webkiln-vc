@@ -13,3 +13,9 @@ db-up:
 
 db-down:
   docker compose down
+
+db-migrate:
+  uv run --directory api --package webkiln-api alembic upgrade head
+
+db-revision message:
+  uv run --directory api --package webkiln-api alembic revision --autogenerate -m "{{message}}"
