@@ -18,7 +18,7 @@ def test_stream_sends_updates_and_worker_events_then_done() -> None:
     assert names[-1] == "done"
     assert events[-1][1] == {"status": "completed"}
     nodes = [next(iter(data)) for name, data in events if name == "updates"]
-    assert nodes[:3] == ["process_initial_input", "seed_tasks", "dispatch"]
+    assert nodes[:4] == ["process_initial_input", "seed_tasks", "analyze", "dispatch"]
     assert events[0][1] == {"process_initial_input": {"initial_input": BRIEF}}
     started = {
         d["agent"] for name, d in events if name == "custom" and d["event"] == "worker_started"

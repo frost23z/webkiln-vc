@@ -26,7 +26,8 @@ class FakeStructured[T: BaseModel]:
 
     async def ainvoke(self, input: list[BaseMessage]) -> T | None:
         self._llm.prompts.append((self._role, list(input)))
-        item = self._llm.next_response(self._role)
+        self._llm.schemas.append(self._schema)
+        item = self._llm.next_response(self._role, self._schema)
         if isinstance(item, BaseException):
             raise item
         if item is None or isinstance(item, self._schema):
@@ -42,14 +43,20 @@ class FakeLLM:
     A response is a schema instance, a dict (validated against the schema, so a bad one raises
     `ValidationError`), `None` (a model that did not comply) or an exception (raised). When a
     role runs out of responses, its last one repeats. Every call is recorded in `prompts`.
+
+    A script key is a role (`"manager"`) or a role and a schema name (`"manager:BriefAnalysis"`).
+    The second form wins, so one role can answer calls with different schemas.
     """
 
     def __init__(self, script: Mapping[str, Sequence[Any]] | None = None) -> None:
         self._script = {role: list(items) for role, items in (script or {}).items()}
         self.prompts: list[tuple[str, list[BaseMessage]]] = []
+        self.schemas: list[type[BaseModel]] = []  # the schema of each call, same order as prompts
 
-    def next_response(self, role: str) -> Any:
-        items = self._script.get(role)
+    def next_response(self, role: str, schema: type[BaseModel] | None = None) -> Any:
+        items = (self._script.get(f"{role}:{schema.__name__}") if schema else None) or (
+            self._script.get(role)
+        )
         if not items:
             msg = f"FakeLLM has no response for role {role!r}"
             raise AssertionError(msg)
@@ -58,8 +65,15 @@ class FakeLLM:
     def structured[T: BaseModel](self, role: str, schema: type[T]) -> FakeStructured[T]:
         return FakeStructured(self, role, schema)
 
-    def prompts_for(self, role: str) -> list[list[BaseMessage]]:
-        return [messages for name, messages in self.prompts if name == role]
+    def prompts_for(
+        self, role: str, schema: type[BaseModel] | None = None
+    ) -> list[list[BaseMessage]]:
+        """The prompts sent to `role`, only those for `schema` when it is given."""
+        return [
+            messages
+            for (name, messages), used in zip(self.prompts, self.schemas, strict=True)
+            if name == role and (schema is None or used is schema)
+        ]
 
 
 async def fake_worker(packet: WorkerInput, _: Context) -> WorkerResult:

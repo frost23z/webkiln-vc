@@ -60,7 +60,9 @@ async def run(workers: dict[str, Any], llm: FakeLLM | None) -> dict[str, Any]:
 
 async def test_a_retry_with_a_new_instruction_runs_only_that_worker_again() -> None:
     workers, calls, packets = failing({"seo": 1})
-    llm = FakeLLM({"manager": [review(decision("seo", "retry", "too long", "Keep it short"))]})
+    llm = FakeLLM(
+        {"manager:FailureReview": [review(decision("seo", "retry", "too long", "Keep it short"))]}
+    )
 
     result = await run(workers, llm)
 
@@ -72,12 +74,14 @@ async def test_a_retry_with_a_new_instruction_runs_only_that_worker_again() -> N
     second = [p for p in packets if p["task"]["agent"] == "seo"][1]
     assert second["task"]["instruction"] == "Keep it short"  # the worker got the new instruction
     assert result["tasks"]["brand"].status == "done"  # the run went on to its dependents
-    assert len(llm.prompts_for("manager")) == 1
+    assert len(llm.prompts_for("manager", FailureReview)) == 1
 
 
 async def test_skipping_a_research_task_lets_the_run_go_on() -> None:
     workers, calls, packets = failing({"competitor": ValueError("boom")})
-    llm = FakeLLM({"manager": [review(decision("competitor", "skip", "no sites found"))]})
+    llm = FakeLLM(
+        {"manager:FailureReview": [review(decision("competitor", "skip", "no sites found"))]}
+    )
 
     result = await run(workers, llm)
 
@@ -92,7 +96,9 @@ async def test_skipping_a_research_task_lets_the_run_go_on() -> None:
 
 async def test_ask_user_stops_the_dependents_and_keeps_the_reason() -> None:
     workers, _, _ = failing({"seo": ValueError("boom")})
-    llm = FakeLLM({"manager": [review(decision("seo", "ask_user", "The niche is unclear"))]})
+    llm = FakeLLM(
+        {"manager:FailureReview": [review(decision("seo", "ask_user", "The niche is unclear"))]}
+    )
 
     result = await run(workers, llm)
 
@@ -104,13 +110,17 @@ async def test_ask_user_stops_the_dependents_and_keeps_the_reason() -> None:
 async def test_one_manager_call_covers_every_failure_of_the_wave() -> None:
     workers, _, _ = failing({"seo": ValueError("a"), "niche": ValueError("b")})
     llm = FakeLLM(
-        {"manager": [review(decision("seo", "ask_user"), decision("niche", "skip", "not needed"))]}
+        {
+            "manager:FailureReview": [
+                review(decision("seo", "ask_user"), decision("niche", "skip", "not needed"))
+            ]
+        }
     )
 
     result = await run(workers, llm)
 
-    assert len(llm.prompts_for("manager")) == 1
-    prompt = "\n".join(str(m.content) for m in llm.prompts_for("manager")[0])
+    assert len(llm.prompts_for("manager", FailureReview)) == 1
+    prompt = "\n".join(str(m.content) for m in llm.prompts_for("manager", FailureReview)[0])
     assert '"task_id": "seo"' in prompt
     assert '"task_id": "niche"' in prompt
     assert '"task_id": "audience"' not in prompt  # only the failed tasks are listed
@@ -119,20 +129,22 @@ async def test_one_manager_call_covers_every_failure_of_the_wave() -> None:
 
 
 async def test_no_manager_call_when_nothing_failed() -> None:
-    llm = FakeLLM({"manager": [review()]})
+    llm = FakeLLM({"manager:FailureReview": [review()]})
     result = await run(fake_workers(), llm)
-    assert llm.prompts_for("manager") == []
+    assert llm.prompts_for("manager", FailureReview) == []
     assert {task.status for task in result["tasks"].values()} == {"done"}
 
 
 async def test_the_manager_cannot_retry_forever() -> None:
     workers, calls, _ = failing({"seo": ValueError("boom")})
-    llm = FakeLLM({"manager": [review(decision("seo", "retry", "again", "Try again"))]})
+    llm = FakeLLM(
+        {"manager:FailureReview": [review(decision("seo", "retry", "again", "Try again"))]}
+    )
 
     result = await run(workers, llm)
 
     assert calls["seo"] == 1 + MAX_REWORKS  # the first run and two reworks
-    assert len(llm.prompts_for("manager")) == 1 + MAX_REWORKS
+    assert len(llm.prompts_for("manager", FailureReview)) == 1 + MAX_REWORKS
     assert result["tasks"]["seo"].status == "needs_user"
     assert "retries are used up" in result["tasks"]["seo"].error
 
@@ -145,7 +157,7 @@ async def test_the_manager_cannot_retry_forever() -> None:
 async def test_without_a_usable_manager_answer_the_user_decides(answer: Any) -> None:
     workers, calls, _ = failing({"seo": ValueError("boom")})
 
-    result = await run(workers, FakeLLM({"manager": [answer]}))
+    result = await run(workers, FakeLLM({"manager:FailureReview": [answer]}))
 
     assert result["tasks"]["seo"].status == "needs_user"
     assert calls["seo"] == 1
@@ -154,7 +166,9 @@ async def test_without_a_usable_manager_answer_the_user_decides(answer: Any) -> 
 
 async def test_a_decision_for_an_unknown_or_finished_task_is_ignored() -> None:
     workers, _, _ = failing({"seo": ValueError("boom")})
-    llm = FakeLLM({"manager": [review(decision("niche", "skip"), decision("nope", "retry"))]})
+    llm = FakeLLM(
+        {"manager:FailureReview": [review(decision("niche", "skip"), decision("nope", "retry"))]}
+    )
 
     result = await run(workers, llm)
 

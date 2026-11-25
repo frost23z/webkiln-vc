@@ -6,6 +6,7 @@ from langgraph.runtime import Runtime
 from langgraph.types import Command, Send
 
 from webkiln_agents.core.schemas import Input
+from webkiln_agents.manager.analysis import analyze_brief
 from webkiln_agents.manager.context import Context
 from webkiln_agents.manager.default_plan import default_plan
 from webkiln_agents.manager.failures import apply_decision, ask_manager, enforce
@@ -32,6 +33,13 @@ def seed_tasks(state: State) -> dict:
     return {"plan": plan, "tasks": {t.id: Task.from_planned(t) for t in plan.tasks}}
 
 
+async def analyze(state: State, runtime: Runtime[Context]) -> dict:
+    """One Manager call that reads the brief for the workers. A failure leaves it empty."""
+    llm = runtime.context.llm if runtime.context else None
+    analysis = await analyze_brief(llm, state.initial_input)
+    return {"analysis": analysis}
+
+
 def worker_packet(task: Task, state: State) -> WorkerInput:
     """What one worker gets: its task, the brief and the summaries of its dependencies only."""
     context = {
@@ -43,7 +51,7 @@ def worker_packet(task: Task, state: State) -> WorkerInput:
     return {
         "task": task.model_dump(),
         "brief": state.initial_input.model_dump(),
-        "analysis": None,
+        "analysis": state.analysis.model_dump() if state.analysis else None,
         "context": context,
     }
 

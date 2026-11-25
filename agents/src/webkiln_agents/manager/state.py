@@ -5,6 +5,7 @@ from langgraph.graph import add_messages
 from pydantic import BaseModel, Field
 
 from webkiln_agents.core.schemas import Input
+from webkiln_agents.manager.analysis import BriefAnalysis
 from webkiln_agents.manager.plan import Plan, Task
 from webkiln_agents.manager.scheduler import merge_dicts
 
@@ -12,6 +13,8 @@ from webkiln_agents.manager.scheduler import merge_dicts
 class State(BaseModel):
     messages: Annotated[list[AnyMessage], add_messages]
     initial_input: Input
+    # The Manager's reading of the brief. `None` when the model could not give one.
+    analysis: BriefAnalysis | None = None
     plan: Plan | None = None
     # Parallel workers write these keys in the same step, so each one merges by task id.
     tasks: Annotated[dict[str, Task], merge_dicts] = Field(default_factory=dict)

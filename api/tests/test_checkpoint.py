@@ -1,3 +1,4 @@
+from webkiln_agents.manager.analysis import BriefAnalysis
 from webkiln_agents.manager.default_plan import default_plan
 from webkiln_agents.manager.plan import Plan, PlannedTask, Task
 from webkiln_api.checkpoint import serde
@@ -19,3 +20,12 @@ def test_task_is_restored_as_a_task() -> None:
     restored = roundtrip(task)
     assert isinstance(restored, Task)
     assert restored == task
+
+
+def test_brief_analysis_is_restored_as_a_brief_analysis() -> None:
+    analysis = BriefAnalysis(
+        purpose="Sell rooms.", business_model="Direct bookings.", expected_functionality=["Book"]
+    )
+    restored = roundtrip(analysis)
+    assert isinstance(restored, BriefAnalysis)
+    assert restored == analysis
