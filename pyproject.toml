@@ -13,6 +13,7 @@ dependencies = []
 dev = [
   "pyrefly>=1.4.1",
   "pytest>=9.2",
+  "pytest-asyncio>=1.5.0",
 ]
 
 [tool.uv]
@@ -62,4 +63,6 @@ project-includes = [
 ]
 
 [tool.pytest]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 pythonpath = [ "." ]
