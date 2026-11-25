@@ -2,6 +2,7 @@ import type { RunSummary } from '@/lib/api'
 
 const statusLabel: Record<RunSummary['status'], string> = {
     running: 'Running',
+    waiting: 'Waiting for you',
     completed: 'Finished',
     failed: 'Failed',
 }

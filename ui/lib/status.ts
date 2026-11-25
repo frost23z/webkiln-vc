@@ -1,7 +1,7 @@
 import type { RunStatus, SseEvent } from './api'
 import { isRecord } from './progress'
 
-export type Banner = { label: string; tone: 'working' | 'done' | 'failed' }
+export type Banner = { label: string; tone: 'working' | 'waiting' | 'done' | 'failed' }
 
 // Phase names for the nodes that exist so far. A node that is not listed shows as "Working".
 const PHASES: Record<string, string> = {
@@ -20,6 +20,8 @@ export function bannerFor(status: RunStatus, node: string | null): Banner {
     switch (status) {
         case 'running':
             return { label: (node && PHASES[node]) || 'Working', tone: 'working' }
+        case 'waiting':
+            return { label: 'Waiting for your decision on the brand', tone: 'waiting' }
         case 'completed':
             return { label: 'Finished', tone: 'done' }
         case 'failed':
@@ -31,5 +33,5 @@ export function bannerFor(status: RunStatus, node: string | null): Banner {
 export function doneStatus(event: SseEvent): RunStatus | null {
     if (event.event !== 'done' || !isRecord(event.data)) return null
     const { status } = event.data
-    return status === 'completed' || status === 'failed' ? status : null
+    return status === 'completed' || status === 'failed' || status === 'waiting' ? status : null
 }

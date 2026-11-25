@@ -4,20 +4,24 @@ import {
     ApiError,
     getRun,
     listRuns,
+    resumeRun,
     retryRun,
     startRun,
     streamRun,
     type Brief,
+    type ReviewDecision,
     type RunDetail,
     type RunStatus,
     type RunSummary,
 } from '@/lib/api'
 import { parseAnalysis, parsePlan, parseTaskStates, planFromEvent, type Plan } from '@/lib/plan'
 import { describeEvent, finishedNodes } from '@/lib/progress'
+import { parseReview } from '@/lib/review'
 import { bannerFor, doneStatus } from '@/lib/status'
 import { clearThreadId, readThreadId, saveThreadId } from '@/lib/thread'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnalysisCard } from './analysis-card'
+import { ApprovalCard } from './approval-card'
 import { BriefForm } from './brief-form'
 import { ProgressLines } from './progress-lines'
 import { RunHistory } from './run-history'
@@ -49,6 +53,8 @@ export function Workspace() {
     const [starting, setStarting] = useState(false)
     // The saved runs, listed under the form.
     const [history, setHistory] = useState<RunSummary[]>([])
+    // True while an answer to the brand review is on its way to the API.
+    const [answering, setAnswering] = useState(false)
 
     /**
      * Follows a run until it ends. The run goes on in the API whether or not this page is open,
@@ -214,6 +220,24 @@ export function Workspace() {
         }
     }
 
+    /**
+     * Answer the brand review. The run carries on in the API from where it paused, so the page
+     * follows it again. The key is new for every click, and a repeat of one is harmless.
+     */
+    async function decide(decision: ReviewDecision) {
+        if (!run) return
+        setError(null)
+        setAnswering(true)
+        try {
+            await resumeRun(run.thread_id, decision, crypto.randomUUID())
+            await follow(run.thread_id)
+        } catch (err) {
+            setError(errorText(err))
+        } finally {
+            setAnswering(false)
+        }
+    }
+
     function newRun() {
         streamAbort.current?.abort()
         clearThreadId()
@@ -227,6 +251,7 @@ export function Workspace() {
 
     const plan = livePlan ?? parsePlan(run?.state?.plan)
     const analysis = parseAnalysis(run?.state)
+    const review = status === 'waiting' ? parseReview(run?.review) : null
 
     if (restoring) {
         return (
@@ -270,6 +295,14 @@ export function Workspace() {
                 >
                     Retry failed tasks
                 </button>
+            )}
+            {review && (
+                <ApprovalCard
+                    key={review.version}
+                    review={review}
+                    busy={answering}
+                    onDecide={decide}
+                />
             )}
             {analysis && <AnalysisCard analysis={analysis} />}
             {plan && (

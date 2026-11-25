@@ -3,7 +3,7 @@ import type { paths } from '../generated/schema'
 
 import { ApiError } from './errors'
 import { readEvents, type SseEvent } from './sse'
-import type { Brief, ErrorResponse } from './types'
+import type { Brief, ErrorResponse, ReviewDecision } from './types'
 
 const baseUrl = process.env.NEXT_PUBLIC_API_URL
 
@@ -57,6 +57,19 @@ export function retryRun(threadId: string) {
     return call(() =>
         client.POST('/runs/{thread_id}/retry', {
             params: { path: { thread_id: threadId } },
+        })
+    )
+}
+
+/**
+ * Answers the brand review. The key makes a repeat of the same click harmless: the API runs the
+ * answer once and replies to a repeat with the run as it stands.
+ */
+export function resumeRun(threadId: string, decision: ReviewDecision, key: string) {
+    return call(() =>
+        client.POST('/runs/{thread_id}/resume', {
+            params: { path: { thread_id: threadId }, header: { 'idempotency-key': key } },
+            body: decision,
         })
     )
 }
