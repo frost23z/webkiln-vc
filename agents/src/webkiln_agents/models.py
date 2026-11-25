@@ -37,6 +37,7 @@ DEFAULT_CHAINS: dict[str, str] = {
     "audience": GEMINI_CHAIN,  # 1 call
     "competitor": GEMINI_CHAIN,  # 1 call, plus up to 3 searches (not model calls)
     "seo": GEMINI_CHAIN,  # 1 call
+    "brand": GEMINI_CHAIN,  # 1 call, plus 1 for every round of feedback that reworks it
 }
 
 # Requests a minute each provider's free tier allows, shared by every model of that provider.

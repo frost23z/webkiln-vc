@@ -53,7 +53,13 @@ async def test_a_real_worker_names_the_missing_key_instead_of_failing_obscurely(
     use_settings(monkeypatch)
     context: Context = build_context(sessions)  # pyrefly: ignore[bad-argument-type]
     task = {"id": "niche", "agent": "niche", "instruction": "", "depends_on": []}
-    packet: WorkerInput = {"task": task, "brief": SAMPLE_BRIEF, "analysis": None, "context": {}}
+    packet: WorkerInput = {
+        "task": task,
+        "brief": SAMPLE_BRIEF,
+        "analysis": None,
+        "context": {},
+        "previous": None,
+    }
     with pytest.raises(ConfigError, match="none of those providers has an API key"):
         await context.workers["niche"](packet, context)
 

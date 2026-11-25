@@ -53,6 +53,8 @@ def worker_packet(task: Task, state: State) -> WorkerInput:
         "brief": state.initial_input.model_dump(),
         "analysis": state.analysis.model_dump() if state.analysis else None,
         "context": context,
+        # A task sent back for rework sees its last answer, so it changes only what was asked.
+        "previous": state.outputs.get(task.id) if task.status == "needs_rework" else None,
     }
 
 

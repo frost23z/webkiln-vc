@@ -14,6 +14,7 @@ class WorkerInput(TypedDict):
     brief: dict[str, Any]  # the user's `Input`
     analysis: dict[str, Any] | None  # the Manager's `BriefAnalysis`, when there is one
     context: dict[str, str]  # summaries of the tasks this one depends on, by task id
+    previous: dict[str, Any] | None  # the task's last full output, when it is sent back to rework
 
 
 class WorkerResult(BaseModel):
