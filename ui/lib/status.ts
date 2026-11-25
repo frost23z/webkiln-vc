@@ -7,8 +7,10 @@ export type Banner = { label: string; tone: 'working' | 'done' | 'failed' }
 const PHASES: Record<string, string> = {
     process_initial_input: 'Planning',
     seed_tasks: 'Planning',
+    analyze: 'Planning',
     dispatch: 'Researching',
     run_worker: 'Researching',
+    review_failures: 'Researching',
     brand_review: 'Waiting for approval',
     edit_router: 'Applying modifications',
 }

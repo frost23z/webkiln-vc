@@ -38,8 +38,19 @@ const WORKER_EVENTS: Record<string, string> = {
     worker_failed: 'failed',
 }
 
+const DECISIONS: Record<string, string> = {
+    retry: 'will run again',
+    skip: 'is skipped',
+    ask_user: 'needs your decision',
+}
+
 function describeCustom(data: unknown): string {
     if (typeof data === 'string') return data
+    if (isRecord(data) && data.event === 'failure_decision' && typeof data.action === 'string') {
+        const outcome = DECISIONS[data.action] ?? data.action
+        const reason = typeof data.reason === 'string' ? `: ${data.reason}` : ''
+        return `${String(data.agent)} ${outcome}${reason}`
+    }
     if (isRecord(data) && typeof data.event === 'string' && data.event in WORKER_EVENTS) {
         return `${String(data.agent)} ${WORKER_EVENTS[data.event]}`
     }

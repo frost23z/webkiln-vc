@@ -18,6 +18,20 @@ const STATUS_CLASS: Record<string, string> = {
     running: 'bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-100',
     done: 'bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-100',
     failed: 'bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-100',
+    needs_rework: 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100',
+    needs_user: 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100',
+}
+
+// A task the user has to look at gets a border in the same colour as its label.
+const CARD_CLASS: Record<string, string> = {
+    failed: 'border-red-300 dark:border-red-800',
+    needs_user: 'border-amber-400 dark:border-amber-700',
+}
+
+// The error text is red for a failure and amber when it is a note about a decision.
+const ERROR_CLASS: Record<string, string> = {
+    needs_user: 'text-amber-800 dark:text-amber-200',
+    skipped: 'text-zinc-600 dark:text-zinc-400',
 }
 
 type Props = {
@@ -40,7 +54,7 @@ export function TaskList({ plan, states, threadId }: Props) {
                     return (
                         <li
                             key={task.id}
-                            className='flex flex-col gap-1 rounded-md border border-zinc-200 p-3 text-sm dark:border-zinc-800'
+                            className={`flex flex-col gap-1 rounded-md border p-3 text-sm ${CARD_CLASS[status] ?? 'border-zinc-200 dark:border-zinc-800'}`}
                         >
                             <span className='flex items-center gap-2 font-medium'>
                                 <span>
@@ -59,7 +73,11 @@ export function TaskList({ plan, states, threadId }: Props) {
                                 </p>
                             )}
                             {error && (
-                                <p className='text-xs text-red-700 dark:text-red-300'>{error}</p>
+                                <p
+                                    className={`text-xs ${ERROR_CLASS[status] ?? 'text-red-700 dark:text-red-300'}`}
+                                >
+                                    {error}
+                                </p>
                             )}
                             {status === 'done' && threadId && (
                                 <>
