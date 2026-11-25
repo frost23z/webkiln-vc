@@ -15,10 +15,12 @@ classifiers = [
   "Programming Language :: Python :: 3.15",
 ]
 dependencies = [
+  "alembic>=1.20.1",
   "fastapi[standard-no-fastapi-cloud-cli]>=0.165",
   "langgraph-checkpoint-postgres>=3.2.1",
   "psycopg[binary,pool]>=3.3.9",
   "pydantic-settings>=2.16.3",
+  "sqlalchemy[asyncio]>=2.1.9",
   "webkiln-agents",
 ]
 scripts.export-openapi-schema = "webkiln_api.scripts:export_openapi_schema"
