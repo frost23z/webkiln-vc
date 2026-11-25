@@ -47,9 +47,11 @@ def test_stream_sends_one_update_per_node_then_done(client: TestClient) -> None:
 
     assert response.headers["content-type"].startswith("text/event-stream")
     events = parse_sse(response.text)
-    assert [name for name, _ in events] == ["updates", "done"]
+    assert [name for name, _ in events] == ["updates"] * 2 + ["done"]
+    nodes = [next(iter(data)) for name, data in events if name == "updates"]
+    assert nodes == ["process_initial_input", "seed_tasks"]
     assert events[0][1] == {"process_initial_input": {"initial_input": BRIEF}}
-    assert events[1][1] == {"status": "completed"}
+    assert events[-1][1] == {"status": "completed"}
 
 
 def test_run_state_is_available_after_the_stream(client: TestClient) -> None:

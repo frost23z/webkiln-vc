@@ -7,7 +7,7 @@ Status = Literal["pending", "running", "done", "failed", "needs_rework"]
 
 
 class PlannedTask(BaseModel):
-    id: str
+    id: str = Field(min_length=1)
     agent: AgentName
     instruction: str = ""
     depends_on: list[str] = Field(default_factory=list)
