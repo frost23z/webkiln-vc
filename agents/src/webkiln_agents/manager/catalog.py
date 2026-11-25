@@ -7,6 +7,7 @@ from webkiln_agents.manager.plan import AgentName
 class AgentSpec:
     name: AgentName
     description: str
+    after: tuple[AgentName, ...] = ()
 
 
 CATALOG: dict[AgentName, AgentSpec] = {
@@ -16,8 +17,16 @@ CATALOG: dict[AgentName, AgentSpec] = {
         AgentSpec("audience", "Defines the target audience and their needs."),
         AgentSpec("competitor", "Looks at competitor sites and finds gaps to exploit."),
         AgentSpec("seo", "Finds keywords and search intent for the site."),
-        AgentSpec("brand", "Writes the brand guideline: tone, colours, typography."),
-        AgentSpec("wireframe", "Plans the pages and sections of the site."),
-        AgentSpec("generate", "Writes the website files from the wireframe and brand."),
+        AgentSpec(
+            "brand",
+            "Writes the brand guideline: tone, colours, typography.",
+            after=("niche", "audience", "competitor", "seo"),
+        ),
+        AgentSpec("wireframe", "Plans the pages and sections of the site.", after=("brand",)),
+        AgentSpec(
+            "generate",
+            "Writes the website files from the wireframe and brand.",
+            after=("wireframe",),
+        ),
     ]
 }
