@@ -4,11 +4,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ApiSettings(BaseSettings):
+    """Read from `.env` (here or one folder up, like the agents' settings) and the environment."""
+
     UI_ORIGIN: str = "http://localhost:3000"
 
     DB_URL: str = "postgresql://webkiln:webkiln@localhost:5432/webkiln"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(".env", "../.env"), env_file_encoding="utf-8", extra="ignore"
+    )
 
 
 @lru_cache
