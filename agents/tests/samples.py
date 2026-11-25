@@ -59,3 +59,23 @@ SEO: dict[str, Any] = {
 }
 
 REPORTS = {"niche": NICHE, "audience": AUDIENCE, "seo": SEO}
+
+COMPETITOR: dict[str, Any] = {
+    "summary": "Rivals lead with photos and a booking bar; story and local guides set one apart.",
+    "competitors": [
+        {
+            "name": "Hotel Aster",
+            "url": "https://hotelaster.example.com/",
+            "positioning": "Quiet luxury in the old town.",
+        },
+        {
+            "name": "The Lantern House",
+            "url": "https://www.lanternhouse.example.org/stay",
+            "positioning": "Design-led rooms with a rooftop bar.",
+        },
+    ],
+    "common_site_structures": ["Home, Rooms, Offers", "Booking bar in the header", "Gallery"],
+    "common_features": ["Online booking", "Room filters", "Newsletter sign-up"],
+    "content_and_messaging": ["Calm, upscale tone", "Stress the location", "Few guest stories"],
+    "differentiation_opportunities": ["Local guides", "Direct-booking perks", "Honest photos"],
+}

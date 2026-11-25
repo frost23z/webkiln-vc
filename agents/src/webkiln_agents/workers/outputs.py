@@ -73,3 +73,28 @@ class SeoStrategy(Report):
     landing_pages: list[LandingPage] = Field(min_length=2, max_length=8)
     content_topics: Strings = Field(min_length=3, max_length=10)
     initial_strategy: str
+
+
+class Competitor(BaseModel):
+    name: str
+    url: str | None = Field(
+        default=None, description="The competitor's own site, a full https:// address."
+    )
+    positioning: str = Field(description="How the competitor presents itself, in one sentence.")
+
+
+class CompetitorAnalysis(Report):
+    """What the model writes. Code adds `unsourced` and `sources` (see `CompetitorReport`)."""
+
+    competitors: list[Competitor] = Field(min_length=2, max_length=6)
+    common_site_structures: Strings = Field(min_length=3, max_length=8)
+    common_features: Strings = Field(min_length=3, max_length=8)
+    content_and_messaging: Strings = Field(min_length=3, max_length=8)
+    differentiation_opportunities: Strings = Field(min_length=3, max_length=8)
+
+
+class CompetitorReport(CompetitorAnalysis):
+    """The saved report. `unsourced` is true when no web search backed it."""
+
+    unsourced: bool = False
+    sources: list[str] = Field(default_factory=list, description="Search result URLs used.")
