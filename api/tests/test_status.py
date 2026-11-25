@@ -19,6 +19,8 @@ def snapshot(statuses: list[str], *, next_steps: tuple[str, ...] = ()) -> StateS
         (["done", "pending"], ("dispatch",), "running"),
         (["done", "failed"], ("run_worker",), "running"),  # siblings still running
         (["done", "failed", "pending"], (), "failed"),
+        (["done", "needs_user", "pending"], (), "failed"),  # waits for the user's retry
+        (["done", "skipped", "done"], (), "completed"),  # a skipped task does not fail it
         (["done", "done"], (), "completed"),
         (["done", "pending"], (), "completed"),  # nothing left that can run
     ],

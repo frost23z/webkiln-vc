@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from support import BRIEF, api, finish, run_to_the_end, saved_run, start_run, with_db
 from webkiln_agents.core.schemas import Input
 from webkiln_agents.manager.context import Context
-from webkiln_agents.testing import fake_context, fake_worker, fake_workers
+from webkiln_agents.testing import FakeLLM, fake_context, fake_worker, fake_workers
 from webkiln_agents.workers.base import WorkerInput, WorkerResult
 from webkiln_api.tables import Project, Run
 
@@ -29,7 +29,9 @@ def wait_for(client: TestClient, thread_id: str, done: int) -> None:
     raise AssertionError(msg)
 
 
-def test_a_failed_worker_fails_the_run_and_retry_repeats_only_that_worker() -> None:
+def test_a_worker_the_user_must_decide_on_fails_the_run_and_retry_repeats_only_that_worker() -> (
+    None
+):
     calls = Counter[str]()
     seo_works = False
 
@@ -50,7 +52,7 @@ def test_a_failed_worker_fails_the_run_and_retry_repeats_only_that_worker() -> N
             "niche": "done",
             "audience": "done",
             "competitor": "done",
-            "seo": "failed",
+            "seo": "needs_user",  # there is no Manager model here, so the user decides
             "brand": "pending",
             "wireframe": "pending",
             "generate": "pending",
@@ -68,6 +70,38 @@ def test_a_failed_worker_fails_the_run_and_retry_repeats_only_that_worker() -> N
 
     assert calls["seo"] == 2
     assert calls["niche"] == calls["audience"] == calls["competitor"] == 1
+
+
+def test_the_manager_can_retry_a_failed_worker_without_the_user() -> None:
+    calls = Counter[str]()
+
+    async def seo_fails_once(packet: WorkerInput, context: Context) -> WorkerResult:
+        agent = packet["task"]["agent"]
+        calls[agent] += 1
+        if agent == "seo" and calls[agent] == 1:
+            msg = "bad request"
+            raise ValueError(msg)
+        return await fake_worker(packet, context)
+
+    decision = {
+        "task_id": "seo",
+        "action": "retry",
+        "reason": "once more",
+        "instruction": "Be brief",
+    }
+    llm = FakeLLM({"manager": [{"decisions": [decision]}]})
+    context = fake_context(workers=dict.fromkeys(fake_workers(), seo_fails_once), llm=llm)
+    with api(context) as client:
+        thread_id = start_run(client)
+        events = finish(client, thread_id)
+
+        assert events[-1] == ("done", {"status": "completed"})
+        assert set(task_statuses(client, thread_id).values()) == {"done"}
+    run, tasks, _ = saved_run(thread_id)
+    assert run.status == "completed"
+    seo = next(row for row in tasks if row.id == "seo")
+    assert (seo.attempts, seo.instruction, seo.error) == (2, "Be brief", None)
+    assert calls["seo"] == 2
 
 
 def test_retry_of_an_unknown_run_is_404() -> None:

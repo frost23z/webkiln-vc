@@ -11,6 +11,7 @@ from webkiln_agents.manager.state import State
 from webkiln_api import store
 from webkiln_api.models import RunDetail, RunResponse, RunSummary, TaskReport, thread_config
 from webkiln_api.openapi import ERROR_RESPONSES
+from webkiln_api.status import STUCK
 from webkiln_api.store import StoredRun
 from webkiln_api.streaming import finished_events
 from webkiln_api.supervisor import RunSupervisor
@@ -85,7 +86,8 @@ async def stream_run(thread_id: str, request: Request) -> StreamingResponse:
 
 @router.post("/{thread_id}/retry", status_code=202)
 async def retry_run(thread_id: str, request: Request) -> RunResponse:
-    """Run the failed tasks again. Finished tasks are not repeated."""
+    """Run the failed tasks again, and the ones that were waiting for the user's decision.
+    Finished tasks are not repeated."""
     run = await get_stored_run(request, thread_id)
     supervisor = supervisor_of(request)
     if run.status != "failed" or supervisor.is_running(thread_id):
@@ -96,7 +98,7 @@ async def retry_run(thread_id: str, request: Request) -> RunResponse:
     failed = {
         task.id: task.model_copy(update={"status": "pending", "error": None})
         for task in tasks.values()
-        if task.status == "failed"
+        if task.status in STUCK
     }
     if failed:
         # Written as the node that precedes `dispatch`, so `dispatch` is the next step.
