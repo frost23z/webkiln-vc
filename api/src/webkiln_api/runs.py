@@ -1,11 +1,12 @@
 from typing import Annotated, cast
 from uuid import uuid7
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic_core import to_jsonable_python
 from webkiln_agents.core.schemas import Input
 from webkiln_agents.manager.plan import Task
+from webkiln_agents.manager.review import ReviewDecision
 from webkiln_agents.manager.state import State
 
 from webkiln_api import store
@@ -62,11 +63,14 @@ async def get_run(thread_id: str, request: Request) -> RunDetail:
     snapshot = await request.app.state.graph.aget_state(thread_config(thread_id))
     # Only the fields the graph state declares. Pydantic objects become plain JSON.
     values = {k: v for k, v in snapshot.values.items() if k in State.model_fields}
+    # What the user is asked to decide. It comes from the checkpoint, so a restart keeps it.
+    review = snapshot.interrupts[0].value if snapshot.interrupts else None
     return RunDetail(
         thread_id=thread_id,
         status=run.status,
         brief=run.brief,
         state=to_jsonable_python(values) if values else None,
+        review=to_jsonable_python(review) if review else None,
     )
 
 
@@ -107,6 +111,38 @@ async def retry_run(thread_id: str, request: Request) -> RunResponse:
         raise HTTPException(status_code=409, detail="The run has nothing to retry")
     await store.set_status(request.app.state.sessions, thread_id, "running")
     supervisor.start(thread_id, None)
+    return RunResponse(thread_id=thread_id, status="running")
+
+
+@router.post("/{thread_id}/resume", status_code=202)
+async def resume_run(
+    thread_id: str,
+    decision: ReviewDecision,
+    request: Request,
+    idempotency_key: Annotated[str | None, Header(max_length=100)] = None,
+) -> RunResponse:
+    """Answer the brand review: approve, or ask for changes. The run carries on from where it
+    paused.
+
+    The run moves from `waiting` to `running` in one atomic update, so of two requests at once
+    only the first resumes it and the other gets 409. A repeat of a request (same
+    `Idempotency-Key`) after that is answered with the run as it stands, and does nothing.
+    """
+    run = await get_stored_run(request, thread_id)
+    sessions = request.app.state.sessions
+    if not await store.claim_resume(sessions, thread_id, idempotency_key):
+        repeated = idempotency_key and idempotency_key == await store.last_resume_key(
+            sessions, thread_id
+        )
+        if not repeated:
+            raise HTTPException(status_code=409, detail="The run is not waiting for a decision")
+        current = await get_stored_run(request, thread_id)
+        return RunResponse(thread_id=thread_id, status=current.status)
+    try:
+        supervisor_of(request).resume(thread_id, decision)
+    except Exception:
+        await store.set_status(sessions, thread_id, run.status)  # nothing started, so still waiting
+        raise
     return RunResponse(thread_id=thread_id, status="running")
 
 

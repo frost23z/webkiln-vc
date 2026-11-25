@@ -4,7 +4,7 @@ from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel
 from webkiln_agents.core.schemas import Input
 
-RunStatus = Literal["running", "completed", "failed"]
+RunStatus = Literal["running", "waiting", "completed", "failed"]
 
 
 class RunResponse(BaseModel):
@@ -15,6 +15,7 @@ class RunResponse(BaseModel):
 class RunDetail(RunResponse):
     brief: Input
     state: dict[str, Any] | None  # None until the run has its first checkpoint
+    review: dict[str, Any] | None  # what the user is asked to decide, while the run is `waiting`
 
 
 class RunSummary(RunResponse):

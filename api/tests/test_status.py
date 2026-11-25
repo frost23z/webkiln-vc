@@ -7,9 +7,11 @@ from webkiln_agents.manager.plan import Task
 from webkiln_api.status import status_of
 
 
-def snapshot(statuses: list[str], *, next_steps: tuple[str, ...] = ()) -> StateSnapshot:
+def snapshot(
+    statuses: list[str], *, next_steps: tuple[str, ...] = (), interrupts: tuple[str, ...] = ()
+) -> StateSnapshot:
     tasks = {str(i): Task(id=str(i), agent="niche", status=s) for i, s in enumerate(statuses)}  # pyrefly: ignore[bad-argument-type]
-    fake: Any = SimpleNamespace(values={"tasks": tasks}, next=next_steps)
+    fake: Any = SimpleNamespace(values={"tasks": tasks}, next=next_steps, interrupts=interrupts)
     return fake
 
 
@@ -32,5 +34,12 @@ def test_status_comes_from_the_snapshot(
 
 
 def test_a_snapshot_with_no_tasks_is_completed() -> None:
-    fake: Any = SimpleNamespace(values={}, next=())
+    fake: Any = SimpleNamespace(values={}, next=(), interrupts=())
     assert status_of(fake) == "completed"
+
+
+def test_a_pending_interrupt_is_waiting_even_though_a_step_is_left() -> None:
+    assert (
+        status_of(snapshot(["done", "done"], next_steps=("brand_review",), interrupts=("ask",)))
+        == "waiting"
+    )

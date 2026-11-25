@@ -1,6 +1,6 @@
 """Everything the API reads and writes in its own Postgres tables."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, cast
@@ -12,7 +12,7 @@ from webkiln_agents.core.schemas import Input
 from webkiln_agents.manager.plan import Task
 
 from webkiln_api.models import RunStatus, TaskReport
-from webkiln_api.tables import Project, Run, TaskOutput, TaskRow
+from webkiln_api.tables import BrandVersion, Project, Run, TaskOutput, TaskRow
 
 type Sessions = async_sessionmaker[AsyncSession]
 
@@ -87,6 +87,7 @@ async def sync_run(
     tasks: Mapping[str, Task],
     summaries: Mapping[str, str],
     outputs: Mapping[str, dict[str, Any]],
+    reviews: Sequence[Mapping[str, Any]] = (),
 ) -> None:
     """Bring the run's rows in line with the graph state, in one transaction.
 
@@ -148,6 +149,46 @@ async def sync_run(
                     },
                 )
             )
+        if reviews:
+            # A decision is never changed, so a repeat of the sync leaves the saved rows alone.
+            await session.execute(
+                insert(BrandVersion)
+                .values(
+                    [
+                        {
+                            "run_id": run_id,
+                            "version": entry["version"],
+                            "guideline": entry["guideline"],
+                            "decision": entry["decision"],
+                            "feedback": entry["feedback"],
+                            "edits": entry["edits"],
+                        }
+                        for entry in reviews
+                    ]
+                )
+                .on_conflict_do_nothing(index_elements=["run_id", "version"])
+            )
+
+
+async def claim_resume(sessions: Sessions, thread_id: str, key: str | None) -> bool:
+    """Move a run from `waiting` to `running` in one atomic update. Only one caller wins.
+
+    Two Approve requests at once both read `waiting`, but the database lets one UPDATE match the
+    row, so the graph is resumed once. The loser gets `False`.
+    """
+    async with sessions.begin() as session:
+        claimed = await session.scalar(
+            update(Run)
+            .where(Run.thread_id == thread_id, Run.status == "waiting")
+            .values(status="running", resume_key=key)
+            .returning(Run.id)
+        )
+    return claimed is not None
+
+
+async def last_resume_key(sessions: Sessions, thread_id: str) -> str | None:
+    async with sessions() as session:
+        return await session.scalar(select(Run.resume_key).where(Run.thread_id == thread_id))
 
 
 async def find_report(sessions: Sessions, thread_id: str, task_id: str) -> TaskReport | None:

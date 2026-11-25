@@ -3,7 +3,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from support import BRIEF, api, finish, parse_sse, run_to_the_end, start_run
+from support import BRIEF, api, approve, finish, parse_sse, run_to_the_end, start_run
 from webkiln_agents.manager.context import Context
 from webkiln_agents.testing import fake_context, fake_worker, fake_workers
 from webkiln_agents.workers.base import WorkerInput, WorkerResult
@@ -12,8 +12,13 @@ from webkiln_api.streaming import RunChannel
 
 def test_stream_sends_updates_and_worker_events_then_done() -> None:
     with api() as client:
-        events = finish(client, start_run(client))
+        thread_id = start_run(client)
+        paused = finish(client, thread_id)
+        events = paused + approve(client, thread_id)
 
+    # The first stream ends at the review, with the question in its last update.
+    assert paused[-1] == ("done", {"status": "waiting"})
+    assert any("__interrupt__" in data for name, data in paused if name == "updates")
     names = [name for name, _ in events]
     assert names[-1] == "done"
     assert events[-1][1] == {"status": "completed"}

@@ -29,6 +29,8 @@ class Run(Base):
     project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id"))
     thread_id: Mapped[str] = mapped_column(unique=True)
     status: Mapped[str]
+    # The key of the request that last resumed the run, so a repeat of it is told apart from a race.
+    resume_key: Mapped[str | None]
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
@@ -70,4 +72,19 @@ class SearchCacheRow(Base):
     key: Mapped[str] = mapped_column(primary_key=True)  # sha256 of the normalised query
     query: Mapped[str]
     results: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class BrandVersion(Base):
+    """One brand guideline the user decided on, with the decision. Together they are the audit
+    trail of the review: what was shown, what the user answered and what they asked for."""
+
+    __tablename__ = "brand_versions"
+
+    run_id: Mapped[UUID] = mapped_column(ForeignKey("runs.id"), primary_key=True)
+    version: Mapped[int] = mapped_column(primary_key=True)
+    guideline: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    decision: Mapped[str]  # "approve" or "revise"
+    feedback: Mapped[str | None]
+    edits: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

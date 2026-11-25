@@ -4,7 +4,7 @@ from collections import Counter
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from support import BRIEF, api, finish, run_to_the_end, saved_run, start_run, with_db
+from support import BRIEF, api, approve, finish, run_to_the_end, saved_run, start_run, with_db
 from webkiln_agents.core.schemas import Input
 from webkiln_agents.manager.context import Context
 from webkiln_agents.testing import FakeLLM, fake_context, fake_worker, fake_workers
@@ -64,7 +64,8 @@ def test_a_worker_the_user_must_decide_on_fails_the_run_and_retry_repeats_only_t
         events = finish(client, thread_id)
 
         assert retry.status_code == 202
-        assert events[-1] == ("done", {"status": "completed"})
+        assert events[-1] == ("done", {"status": "waiting"})  # the brand is ready for review
+        assert approve(client, thread_id)[-1] == ("done", {"status": "completed"})
         assert set(task_statuses(client, thread_id).values()) == {"done"}
         assert client.post(f"/runs/{thread_id}/retry").status_code == 409  # nothing failed now
 
@@ -93,9 +94,8 @@ def test_the_manager_can_retry_a_failed_worker_without_the_user() -> None:
     context = fake_context(workers=dict.fromkeys(fake_workers(), seo_fails_once), llm=llm)
     with api(context) as client:
         thread_id = start_run(client)
-        events = finish(client, thread_id)
-
-        assert events[-1] == ("done", {"status": "completed"})
+        assert finish(client, thread_id)[-1] == ("done", {"status": "waiting"})
+        assert approve(client, thread_id)[-1] == ("done", {"status": "completed"})
         assert set(task_statuses(client, thread_id).values()) == {"done"}
     run, tasks, _ = saved_run(thread_id)
     assert run.status == "completed"
@@ -131,9 +131,8 @@ def test_killing_the_api_mid_wave_and_restarting_runs_only_the_unfinished_worker
 
     with api(fake_context(workers=dict.fromkeys(fake_workers(), counts))) as client:
         # The startup sweep already resumed the run. Following it ends when it is done.
-        events = finish(client, thread_id)
-
-        assert events[-1] == ("done", {"status": "completed"})
+        assert finish(client, thread_id)[-1] == ("done", {"status": "waiting"})
+        assert approve(client, thread_id)[-1] == ("done", {"status": "completed"})
         assert set(task_statuses(client, thread_id).values()) == {"done"}
 
     run, tasks, outputs = saved_run(thread_id)
@@ -164,7 +163,7 @@ def test_a_run_that_never_got_a_checkpoint_starts_again_from_its_brief() -> None
     with api() as client:
         events = finish(client, thread_id)
 
-        assert events[-1] == ("done", {"status": "completed"})
+        assert events[-1] == ("done", {"status": "waiting"})
         assert client.get(f"/runs/{thread_id}").json()["brief"] == BRIEF
 
 

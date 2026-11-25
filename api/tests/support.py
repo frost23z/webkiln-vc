@@ -44,9 +44,25 @@ def finish(client: TestClient, thread_id: str) -> list[tuple[str, dict]]:
     return parse_sse(client.get(f"/runs/{thread_id}/stream").text)
 
 
-def run_to_the_end(client: TestClient, brief: dict | None = None) -> str:
+def approve(client: TestClient, thread_id: str, key: str | None = None) -> list[tuple[str, dict]]:
+    """Approve the brand when the run is waiting, then follow the run to its end."""
+    headers = {"Idempotency-Key": key} if key else {}
+    response = client.post(f"/runs/{thread_id}/resume", json={"action": "approve"}, headers=headers)
+    assert response.status_code == 202, response.text
+    return finish(client, thread_id)
+
+
+def run_to_review(client: TestClient, brief: dict | None = None) -> str:
+    """Start a run and follow it until it pauses at the brand review."""
     thread_id = start_run(client, brief)
-    finish(client, thread_id)
+    assert finish(client, thread_id)[-1] == ("done", {"status": "waiting"})
+    return thread_id
+
+
+def run_to_the_end(client: TestClient, brief: dict | None = None) -> str:
+    """A whole run, with the brand approved at the pause."""
+    thread_id = run_to_review(client, brief)
+    approve(client, thread_id)
     return thread_id
 
 
