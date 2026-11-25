@@ -53,9 +53,25 @@ export function getRun(threadId: string) {
     )
 }
 
+export function retryRun(threadId: string) {
+    return call(() =>
+        client.POST('/runs/{thread_id}/retry', {
+            params: { path: { thread_id: threadId } },
+        })
+    )
+}
+
+export function getTaskReport(threadId: string, taskId: string) {
+    return call(() =>
+        client.GET('/runs/{thread_id}/tasks/{task_id}', {
+            params: { path: { thread_id: threadId, task_id: taskId } },
+        })
+    )
+}
+
 /**
- * Starts the run and yields its server-sent events until the stream ends.
- * `fetch` is used instead of `EventSource` so the request can be aborted.
+ * Follows the run and yields its server-sent events until the stream ends.
+ * A run that is already going first replays its events so far. `fetch` is used instead of `EventSource` so the request can be aborted.
  */
 export async function* streamRun(threadId: string, signal?: AbortSignal): AsyncGenerator<SseEvent> {
     let response: Response

@@ -4,6 +4,7 @@ import {
     ApiError,
     getRun,
     listRuns,
+    retryRun,
     startRun,
     streamRun,
     type Brief,
@@ -11,11 +12,11 @@ import {
     type RunStatus,
     type RunSummary,
 } from '@/lib/api'
-import { parsePlan, planFromEvent, type Plan } from '@/lib/plan'
+import { parsePlan, parseTaskStates, planFromEvent, type Plan } from '@/lib/plan'
 import { describeEvent, finishedNodes } from '@/lib/progress'
 import { bannerFor, doneStatus } from '@/lib/status'
 import { clearThreadId, readThreadId, saveThreadId } from '@/lib/thread'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { BriefForm } from './brief-form'
 import { ProgressLines } from './progress-lines'
 import { RunHistory } from './run-history'
@@ -48,7 +49,73 @@ export function Workspace() {
     // The saved runs, listed under the form.
     const [history, setHistory] = useState<RunSummary[]>([])
 
-    // On page load, show the run saved in this tab, if there is one.
+    /**
+     * Follows a run until it ends. The run goes on in the API whether or not this page is open,
+     * so a connection made late first replays the events so far. After every update the run is
+     * loaded again, so the task statuses follow the graph state.
+     */
+    const follow = useCallback(async (threadId: string) => {
+        streamAbort.current?.abort()
+        const abort = new AbortController()
+        streamAbort.current = abort
+        setLines([])
+        setLivePlan(null)
+        setNode(null)
+        setStatus('running')
+
+        let loading = false
+        let again = false
+        async function refresh() {
+            if (loading) {
+                again = true // one more load after this one, so the last update is never missed
+                return
+            }
+            loading = true
+            try {
+                do {
+                    again = false
+                    const loaded = await getRun(threadId)
+                    if (!abort.signal.aborted) setRun(loaded)
+                } while (again)
+            } catch {
+                // The next update loads it again.
+            } finally {
+                loading = false
+            }
+        }
+
+        try {
+            for await (const event of streamRun(threadId, abort.signal)) {
+                const line = describeEvent(event)
+                if (line) setLines((current) => [...current, line])
+                const planned = planFromEvent(event)
+                if (planned) setLivePlan(planned)
+                const last = finishedNodes(event).at(-1)
+                if (last) setNode(last)
+                const final = doneStatus(event)
+                if (final) setStatus(final)
+                if (event.event === 'updates') void refresh()
+            }
+            const loaded = await getRun(threadId) // the state after the run
+            if (abort.signal.aborted) return
+            setRun(loaded)
+            setStatus(loaded.status)
+        } catch (err) {
+            if (abort.signal.aborted) return // the user started a new run
+            // Losing the connection does not stop the run, so show what the API says it is now.
+            setError(errorText(err))
+            try {
+                const loaded = await getRun(threadId)
+                setRun(loaded)
+                setStatus(loaded.status)
+            } catch {
+                // The API is down. The banner keeps what it showed.
+            }
+        }
+    }, [])
+
+    // On page load, show the run saved in this tab, if there is one. A run that is still going
+    // is followed again.
     useEffect(() => {
         const threadId = readThreadId()
         if (!threadId) {
@@ -61,6 +128,7 @@ export function Workspace() {
                 if (cancelled) return
                 setRun(saved)
                 setStatus(saved.status)
+                if (saved.status === 'running') void follow(threadId)
             })
             .catch((err) => {
                 if (cancelled) return
@@ -76,8 +144,9 @@ export function Workspace() {
             })
         return () => {
             cancelled = true
+            streamAbort.current?.abort()
         }
-    }, [])
+    }, [follow])
 
     // Load the saved runs whenever the form is on screen: on page load and after "New run".
     const formShown = !restoring && run === null
@@ -103,6 +172,10 @@ export function Workspace() {
             saveThreadId(threadId)
             setRun(saved)
             setStatus(saved.status)
+            setLines([])
+            setLivePlan(null)
+            setNode(null)
+            if (saved.status === 'running') void follow(threadId)
         } catch (err) {
             setError(errorText(err))
         }
@@ -115,31 +188,28 @@ export function Workspace() {
         setNode(null)
         setStatus(null)
         setStarting(true)
-        const abort = new AbortController()
-        streamAbort.current = abort
         try {
             const { thread_id } = await startRun(brief)
             saveThreadId(thread_id)
             setRun(await getRun(thread_id))
             setStarting(false)
-            setStatus('running')
-            for await (const event of streamRun(thread_id, abort.signal)) {
-                const line = describeEvent(event)
-                if (line) setLines((current) => [...current, line])
-                const planned = planFromEvent(event)
-                if (planned) setLivePlan(planned)
-                const last = finishedNodes(event).at(-1)
-                if (last) setNode(last)
-                const final = doneStatus(event)
-                if (final) setStatus(final)
-            }
-            setRun(await getRun(thread_id)) // the state after the run
+            await follow(thread_id)
         } catch (err) {
-            if (abort.signal.aborted) return // the user started a new run
-            setStatus((current) => (current === 'running' ? 'failed' : current))
             setError(errorText(err))
         } finally {
             setStarting(false)
+        }
+    }
+
+    /** Run the failed tasks again. The ones that finished are not repeated. */
+    async function retry() {
+        if (!run) return
+        setError(null)
+        try {
+            await retryRun(run.thread_id)
+            await follow(run.thread_id)
+        } catch (err) {
+            setError(errorText(err))
         }
     }
 
@@ -190,7 +260,22 @@ export function Workspace() {
             )}
             {status && <StatusBanner banner={bannerFor(status, node)} />}
             <ProgressLines lines={lines} />
-            {plan && <TaskList plan={plan} />}
+            {status === 'failed' && run && (
+                <button
+                    type='button'
+                    onClick={retry}
+                    className='self-start rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900'
+                >
+                    Retry failed tasks
+                </button>
+            )}
+            {plan && (
+                <TaskList
+                    plan={plan}
+                    states={parseTaskStates(run?.state)}
+                    threadId={run?.thread_id}
+                />
+            )}
             {run && (
                 <pre className='overflow-x-auto rounded-md bg-zinc-100 p-4 text-xs dark:bg-zinc-900'>
                     {JSON.stringify(run, null, 2)}

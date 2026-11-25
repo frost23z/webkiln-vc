@@ -7,6 +7,8 @@ export type Banner = { label: string; tone: 'working' | 'done' | 'failed' }
 const PHASES: Record<string, string> = {
     process_initial_input: 'Planning',
     seed_tasks: 'Planning',
+    dispatch: 'Researching',
+    run_worker: 'Researching',
     brand_review: 'Waiting for approval',
     edit_router: 'Applying modifications',
 }
@@ -14,8 +16,6 @@ const PHASES: Record<string, string> = {
 /** `node` is the last node that finished, so its phase shows until the next update arrives. */
 export function bannerFor(status: RunStatus, node: string | null): Banner {
     switch (status) {
-        case 'created':
-            return { label: 'Starting', tone: 'working' }
         case 'running':
             return { label: (node && PHASES[node]) || 'Working', tone: 'working' }
         case 'completed':

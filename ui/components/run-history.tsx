@@ -1,7 +1,6 @@
 import type { RunSummary } from '@/lib/api'
 
 const statusLabel: Record<RunSummary['status'], string> = {
-    created: 'Not started',
     running: 'Running',
     completed: 'Finished',
     failed: 'Failed',

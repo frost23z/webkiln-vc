@@ -18,7 +18,7 @@ export function describeEvent(event: SseEvent): string | null {
             return nodes.length > 0 ? `Finished ${nodes.join(', ')}` : null
         }
         case 'custom':
-            return typeof data === 'string' ? data : JSON.stringify(data)
+            return describeCustom(data)
         case 'error':
             return isRecord(data) && typeof data.message === 'string'
                 ? data.message
@@ -30,4 +30,18 @@ export function describeEvent(event: SseEvent): string | null {
         default:
             return null
     }
+}
+
+const WORKER_EVENTS: Record<string, string> = {
+    worker_started: 'started',
+    worker_done: 'finished',
+    worker_failed: 'failed',
+}
+
+function describeCustom(data: unknown): string {
+    if (typeof data === 'string') return data
+    if (isRecord(data) && typeof data.event === 'string' && data.event in WORKER_EVENTS) {
+        return `${String(data.agent)} ${WORKER_EVENTS[data.event]}`
+    }
+    return JSON.stringify(data)
 }

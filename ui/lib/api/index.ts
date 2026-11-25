@@ -1,4 +1,4 @@
-export { getRun, listRuns, startRun, streamRun } from './client'
+export { getRun, getTaskReport, listRuns, retryRun, startRun, streamRun } from './client'
 export { ApiError } from './errors'
 export type { SseEvent } from './sse'
 
@@ -10,4 +10,5 @@ export type {
     RunResponse,
     RunStatus,
     RunSummary,
+    TaskReport,
 } from './types'

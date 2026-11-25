@@ -32,3 +32,19 @@ export function planFromEvent(event: SseEvent): Plan | null {
     const update = event.data['seed_tasks']
     return isRecord(update) && 'plan' in update ? parsePlan(update.plan) : null
 }
+
+const taskStateSchema = z.object({
+    id: z.string(),
+    status: z.string(),
+    attempts: z.number().default(0),
+    error: z.string().nullish(),
+})
+
+export type TaskState = z.infer<typeof taskStateSchema>
+
+/** The live state of each task by id, from the `tasks` of a run's state. Empty if not valid. */
+export function parseTaskStates(state: unknown): Record<string, TaskState> {
+    const tasks = isRecord(state) ? state.tasks : undefined
+    const parsed = z.record(z.string(), taskStateSchema).safeParse(tasks)
+    return parsed.success ? parsed.data : {}
+}
