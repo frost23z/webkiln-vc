@@ -2,6 +2,7 @@ from uuid import UUID
 
 import pytest
 from support import BRIEF, api, run_to_the_end, start_run
+from webkiln_agents.testing import FakeLLM, fake_context
 
 
 def test_valid_brief_starts_a_run_and_returns_its_thread_id() -> None:
@@ -56,3 +57,17 @@ def test_get_run_returns_the_brief_and_the_graph_state() -> None:
 def test_get_unknown_run_returns_404() -> None:
     with api() as client:
         assert client.get("/runs/does-not-exist").status_code == 404
+
+
+def test_the_brief_analysis_is_part_of_the_run_state_and_survives_a_reload() -> None:
+    analysis = {
+        "purpose": "Sell rooms.",
+        "business_model": "Direct bookings.",
+        "expected_functionality": ["Book a stay"],
+    }
+    llm = FakeLLM({"manager:BriefAnalysis": [analysis]})
+    with api(fake_context(llm=llm)) as client:
+        thread_id = run_to_the_end(client)
+        state = client.get(f"/runs/{thread_id}").json()["state"]
+
+    assert state["analysis"] == analysis

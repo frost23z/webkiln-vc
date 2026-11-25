@@ -48,3 +48,18 @@ export function parseTaskStates(state: unknown): Record<string, TaskState> {
     const parsed = z.record(z.string(), taskStateSchema).safeParse(tasks)
     return parsed.success ? parsed.data : {}
 }
+
+const analysisSchema = z.object({
+    purpose: z.string(),
+    business_model: z.string(),
+    expected_functionality: z.array(z.string()),
+})
+
+export type BriefAnalysis = z.infer<typeof analysisSchema>
+
+/** The Manager's reading of the brief from a run's state, or null when there is none. */
+export function parseAnalysis(state: unknown): BriefAnalysis | null {
+    const analysis = isRecord(state) ? state.analysis : undefined
+    const parsed = analysisSchema.safeParse(analysis)
+    return parsed.success ? parsed.data : null
+}

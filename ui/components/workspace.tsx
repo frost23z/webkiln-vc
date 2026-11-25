@@ -12,11 +12,12 @@ import {
     type RunStatus,
     type RunSummary,
 } from '@/lib/api'
-import { parsePlan, parseTaskStates, planFromEvent, type Plan } from '@/lib/plan'
+import { parseAnalysis, parsePlan, parseTaskStates, planFromEvent, type Plan } from '@/lib/plan'
 import { describeEvent, finishedNodes } from '@/lib/progress'
 import { bannerFor, doneStatus } from '@/lib/status'
 import { clearThreadId, readThreadId, saveThreadId } from '@/lib/thread'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { AnalysisCard } from './analysis-card'
 import { BriefForm } from './brief-form'
 import { ProgressLines } from './progress-lines'
 import { RunHistory } from './run-history'
@@ -225,6 +226,7 @@ export function Workspace() {
     }
 
     const plan = livePlan ?? parsePlan(run?.state?.plan)
+    const analysis = parseAnalysis(run?.state)
 
     if (restoring) {
         return (
@@ -269,17 +271,13 @@ export function Workspace() {
                     Retry failed tasks
                 </button>
             )}
+            {analysis && <AnalysisCard analysis={analysis} />}
             {plan && (
                 <TaskList
                     plan={plan}
                     states={parseTaskStates(run?.state)}
                     threadId={run?.thread_id}
                 />
-            )}
-            {run && (
-                <pre className='overflow-x-auto rounded-md bg-zinc-100 p-4 text-xs dark:bg-zinc-900'>
-                    {JSON.stringify(run, null, 2)}
-                </pre>
             )}
         </div>
     )
