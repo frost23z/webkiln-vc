@@ -104,7 +104,7 @@ async def stream_run(thread_id: str, request: Request) -> StreamingResponse:
 
     if record.status == "created":
         record.status = "running"  # set here, so a second connection is refused at once
-        events = run_events(request.app.state.graph, record, thread_id)
+        events = run_events(request.app.state.graph, record, thread_id, request.app.state.sessions)
     else:
         events = finished_events(record)
     headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
