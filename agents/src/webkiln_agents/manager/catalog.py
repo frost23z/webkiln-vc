@@ -8,15 +8,21 @@ class AgentSpec:
     name: AgentName
     description: str
     after: tuple[AgentName, ...] = ()
+    # The run can go on without this agent's result. Its dependents are told it was skipped.
+    skippable: bool = False
 
 
 CATALOG: dict[AgentName, AgentSpec] = {
     spec.name: spec
     for spec in [
-        AgentSpec("niche", "Researches the niche: market, trends and typical customers."),
-        AgentSpec("audience", "Defines the target audience and their needs."),
-        AgentSpec("competitor", "Looks at competitor sites and finds gaps to exploit."),
-        AgentSpec("seo", "Finds keywords and search intent for the site."),
+        AgentSpec(
+            "niche", "Researches the niche: market, trends and typical customers.", skippable=True
+        ),
+        AgentSpec("audience", "Defines the target audience and their needs.", skippable=True),
+        AgentSpec(
+            "competitor", "Looks at competitor sites and finds gaps to exploit.", skippable=True
+        ),
+        AgentSpec("seo", "Finds keywords and search intent for the site.", skippable=True),
         AgentSpec(
             "brand",
             "Writes the brand guideline: tone, colours, typography.",

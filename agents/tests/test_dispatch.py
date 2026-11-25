@@ -41,7 +41,9 @@ async def test_the_four_research_tasks_run_in_one_step_followed_by_one_dispatch(
     first_wave = next(nodes for nodes in by_step.values() if "run_worker" in nodes)
     assert first_wave == ["run_worker"] * 4
     wave_step = next(step for step, nodes in by_step.items() if nodes == first_wave)
-    assert by_step[wave_step + 1] == ["dispatch"]
+    # One review of the wave's failures (a no-op here), then one dispatch.
+    assert by_step[wave_step + 1] == ["review_failures"]
+    assert by_step[wave_step + 2] == ["dispatch"]
 
 
 async def test_the_research_workers_really_overlap_in_time() -> None:

@@ -90,8 +90,8 @@ async def test_a_transient_error_that_never_passes_fails_the_task_after_three_tr
 
     result = await run(context)
 
-    assert calls["seo"] == 3
-    assert result["tasks"]["seo"].status == "failed"
+    assert calls["seo"] == 3  # the graph's retries; the Manager is not asked to run it again
+    assert result["tasks"]["seo"].status == "needs_user"  # no Manager model, so the user decides
 
 
 async def test_a_non_transient_error_is_not_retried() -> None:
@@ -100,8 +100,8 @@ async def test_a_non_transient_error_is_not_retried() -> None:
     result = await run(context)
 
     assert calls["seo"] == 1
-    assert result["tasks"]["seo"].status == "failed"
-    assert result["tasks"]["seo"].error == "ValueError: bad output"
+    assert result["tasks"]["seo"].status == "needs_user"
+    assert "ValueError: bad output" in result["tasks"]["seo"].error  # the cause stays visible
 
 
 async def test_one_failure_leaves_siblings_done_and_dependents_pending() -> None:
@@ -114,7 +114,7 @@ async def test_one_failure_leaves_siblings_done_and_dependents_pending() -> None
         "niche": "done",
         "audience": "done",
         "seo": "done",
-        "competitor": "failed",
+        "competitor": "needs_user",
         "brand": "pending",
         "wireframe": "pending",
         "generate": "pending",
@@ -128,7 +128,9 @@ async def test_the_error_text_is_cut_short() -> None:
 
     result = await run(context)
 
-    assert len(result["tasks"]["seo"].error) == 300
+    assert len(result["tasks"]["seo"].error) <= 700
+    assert "x" * 280 in result["tasks"]["seo"].error
+    assert "x" * 300 not in result["tasks"]["seo"].error  # the worker's error was cut at 300
 
 
 async def test_each_worker_reports_its_progress_on_the_custom_stream() -> None:

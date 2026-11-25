@@ -11,6 +11,7 @@ from webkiln_agents.manager.nodes import (
     dispatch,
     mark_failed,
     process_initial_input,
+    review_failures,
     run_worker,
     seed_tasks,
 )
@@ -36,6 +37,7 @@ def build_graph(
     builder.add_node("process_initial_input", process_initial_input)
     builder.add_node("seed_tasks", seed_tasks)
     builder.add_node("dispatch", dispatch)
+    builder.add_node("review_failures", review_failures)
     # LangGraph's type hints have no handler that takes `error: NodeError`, but it injects it.
     builder.add_node(  # pyrefly: ignore[no-matching-overload]
         "run_worker",
@@ -48,8 +50,9 @@ def build_graph(
     builder.add_edge(START, "process_initial_input")
     builder.add_edge("process_initial_input", "seed_tasks")
     builder.add_edge("seed_tasks", "dispatch")
-    # `dispatch` picks its next step itself (`Send` for a wave, or the end), so it has no edge out.
-    builder.add_edge("run_worker", "dispatch")
+    # A finished wave goes through `review_failures` (a worker that failed arrives there from
+    # `mark_failed`). `dispatch` and `review_failures` choose their next step themselves.
+    builder.add_edge("run_worker", "review_failures")
 
     return builder.compile(checkpointer=checkpointer)
 

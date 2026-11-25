@@ -8,6 +8,7 @@ from langgraph.types import Command, Send
 from webkiln_agents.core.schemas import Input
 from webkiln_agents.manager.context import Context
 from webkiln_agents.manager.default_plan import default_plan
+from webkiln_agents.manager.failures import apply_decision, ask_manager, enforce
 from webkiln_agents.manager.plan import Task
 from webkiln_agents.manager.scheduler import ready_tasks
 from webkiln_agents.manager.state import State
@@ -88,15 +89,36 @@ async def run_worker(state: WorkerInput, runtime: Runtime[Context]) -> dict:
     }
 
 
-def mark_failed(state: WorkerInput, error: NodeError) -> Command[Literal["dispatch"]]:
+def mark_failed(state: WorkerInput, error: NodeError) -> Command[Literal["review_failures"]]:
     """The error handler of `run_worker`, called once the retries are used up.
 
-    It records the failure and goes back to `dispatch`. Siblings that finished stay `done`, and
-    tasks that depend on this one stay `pending`. A handler must never raise, so it keeps to
+    It records the failure and goes on to `review_failures`. Siblings that finished stay `done`,
+    and tasks that depend on this one stay `pending`. A handler must never raise, so it keeps to
     plain code. The error text is cut short and holds no traceback.
     """
     task = Task(**state["task"])
     message = f"{type(error.error).__name__}: {error.error}"[:300]
     progress("worker_failed", task, error=message)
     failed = task.model_copy(update={"status": "failed", "error": message})
-    return Command(update={"tasks": {task.id: failed}}, goto="dispatch")
+    return Command(update={"tasks": {task.id: failed}}, goto="review_failures")
+
+
+async def review_failures(state: State, runtime: Runtime[Context]) -> Command[Literal["dispatch"]]:
+    """The Manager's decision on every failed task, then back to `dispatch`.
+
+    Runs once after each wave, whether or not a worker failed, and does nothing when none did. One
+    Manager call covers all failures of the wave. A task is retried (`needs_rework`), skipped, or
+    handed to the user (`needs_user`). The model proposes and `enforce` applies the rules, so a
+    missing, late or broken answer ends as a question to the user, never as a loop.
+    """
+    failed = sorted((t for t in state.tasks.values() if t.status == "failed"), key=lambda t: t.id)
+    if not failed:
+        return Command(goto="dispatch")
+    llm = runtime.context.llm if runtime.context else None
+    proposed = await ask_manager(llm, failed, state.initial_input)
+    updates: dict[str, Task] = {}
+    for task in failed:
+        decision = enforce(task, proposed.get(task.id))
+        updates[task.id] = apply_decision(task, decision)
+        progress("failure_decision", task, action=decision.action, reason=decision.reason)
+    return Command(update={"tasks": updates}, goto="dispatch")
