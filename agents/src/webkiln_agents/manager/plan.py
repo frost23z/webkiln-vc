@@ -3,7 +3,15 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 AgentName = Literal["niche", "audience", "competitor", "seo", "brand", "wireframe", "generate"]
-Status = Literal["pending", "running", "done", "failed", "needs_rework"]
+Status = Literal[
+    "pending",  # not started
+    "running",  # claimed by `dispatch`
+    "done",  # finished, output validated
+    "failed",  # retries used up, waiting for the Manager's decision
+    "needs_rework",  # sent back to run again, with a new instruction
+    "skipped",  # the Manager dropped it, and the run goes on without it
+    "needs_user",  # the Manager could not fix it, so it waits for the user
+]
 
 
 class PlannedTask(BaseModel):
