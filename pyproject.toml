@@ -57,7 +57,7 @@ lint.select = [
 "**/tests/**/*.py" = [ "S101", "S105", "S106" ]
 
 [tool.pyrefly]
-search-path = [ "api/tests" ]
+search-path = [ "agents/tests", "api/tests" ]
 project-includes = [
   "**/*.py*",
   "**/*.pyi",
