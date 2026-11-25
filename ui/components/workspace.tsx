@@ -11,6 +11,7 @@ import {
     type RunStatus,
     type RunSummary,
 } from '@/lib/api'
+import { parsePlan, planFromEvent, type Plan } from '@/lib/plan'
 import { describeEvent, finishedNodes } from '@/lib/progress'
 import { bannerFor, doneStatus } from '@/lib/status'
 import { clearThreadId, readThreadId, saveThreadId } from '@/lib/thread'
@@ -19,6 +20,7 @@ import { BriefForm } from './brief-form'
 import { ProgressLines } from './progress-lines'
 import { RunHistory } from './run-history'
 import { StatusBanner } from './status-banner'
+import { TaskList } from './task-list'
 
 /** The message of an API error plus its field details, or a generic text for anything else. */
 function errorText(err: unknown): string {
@@ -35,6 +37,8 @@ export function Workspace() {
     const [node, setNode] = useState<string | null>(null)
     // The live status. `run.status` only changes when the run is loaded again.
     const [status, setStatus] = useState<RunStatus | null>(null)
+    // The plan as soon as seed_tasks finishes. A saved run gets its plan from `run.state`.
+    const [livePlan, setLivePlan] = useState<Plan | null>(null)
     // Lets "New run" stop a stream that is still open.
     const streamAbort = useRef<AbortController | null>(null)
     // True until the saved thread id has been looked up, so the form does not flash on refresh.
@@ -107,6 +111,7 @@ export function Workspace() {
     async function submit(brief: Brief) {
         setError(null)
         setLines([])
+        setLivePlan(null)
         setNode(null)
         setStatus(null)
         setStarting(true)
@@ -121,6 +126,8 @@ export function Workspace() {
             for await (const event of streamRun(thread_id, abort.signal)) {
                 const line = describeEvent(event)
                 if (line) setLines((current) => [...current, line])
+                const planned = planFromEvent(event)
+                if (planned) setLivePlan(planned)
                 const last = finishedNodes(event).at(-1)
                 if (last) setNode(last)
                 const final = doneStatus(event)
@@ -142,9 +149,12 @@ export function Workspace() {
         setRun(null)
         setError(null)
         setLines([])
+        setLivePlan(null)
         setNode(null)
         setStatus(null)
     }
+
+    const plan = livePlan ?? parsePlan(run?.state?.plan)
 
     if (restoring) {
         return (
@@ -180,6 +190,7 @@ export function Workspace() {
             )}
             {status && <StatusBanner banner={bannerFor(status, node)} />}
             <ProgressLines lines={lines} />
+            {plan && <TaskList plan={plan} />}
             {run && (
                 <pre className='overflow-x-auto rounded-md bg-zinc-100 p-4 text-xs dark:bg-zinc-900'>
                     {JSON.stringify(run, null, 2)}

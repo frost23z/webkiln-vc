@@ -6,8 +6,6 @@ export type Banner = { label: string; tone: 'working' | 'done' | 'failed' }
 // Phase names for the nodes that exist so far. A node that is not listed shows as "Working".
 const PHASES: Record<string, string> = {
     process_initial_input: 'Planning',
-    plan: 'Planning',
-    check_plan: 'Planning',
     seed_tasks: 'Planning',
     brand_review: 'Waiting for approval',
     edit_router: 'Applying modifications',
