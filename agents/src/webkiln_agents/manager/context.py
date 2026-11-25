@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from langchain_core.runnables import RunnableConfig
 
 from webkiln_agents.llm import LLMProvider
+from webkiln_agents.search import SearchProvider
 from webkiln_agents.workers.base import Worker
 
 
@@ -17,6 +18,7 @@ class Context:
 
     workers: Mapping[str, Worker] = field(default_factory=dict)
     llm: LLMProvider | None = None
+    search: SearchProvider | None = None  # web search, for the agents that use it
     max_concurrency: int = 4
 
 
