@@ -1,5 +1,7 @@
 from typing import Literal
 
+from langgraph.config import get_stream_writer
+from langgraph.errors import NodeError
 from langgraph.runtime import Runtime
 from langgraph.types import Command, Send
 
@@ -66,14 +68,35 @@ def dispatch(state: State, runtime: Runtime[Context]) -> Command[Literal["run_wo
     return Command(update={"tasks": running}, goto=sends)
 
 
+def progress(event: str, task: Task, **extra: str) -> None:
+    """Send a progress event to the stream. It is not state, so it needs no checkpoint."""
+    get_stream_writer()({"event": event, "task_id": task.id, "agent": task.agent, **extra})
+
+
 async def run_worker(state: WorkerInput, runtime: Runtime[Context]) -> dict:
     """Run one task's worker. Retries and failures are handled around this node (see graph.py)."""
     context = runtime.context or Context()
     task = Task(**state["task"])
+    progress("worker_started", task)
     result = await context.workers[task.agent](state, context)
     done = task.model_copy(update={"status": "done", "error": None})
+    progress("worker_done", task)
     return {
         "tasks": {task.id: done},
         "summaries": {task.id: result.summary},
         "outputs": {task.id: result.data},
     }
+
+
+def mark_failed(state: WorkerInput, error: NodeError) -> Command[Literal["dispatch"]]:
+    """The error handler of `run_worker`, called once the retries are used up.
+
+    It records the failure and goes back to `dispatch`. Siblings that finished stay `done`, and
+    tasks that depend on this one stay `pending`. A handler must never raise, so it keeps to
+    plain code. The error text is cut short and holds no traceback.
+    """
+    task = Task(**state["task"])
+    message = f"{type(error.error).__name__}: {error.error}"[:300]
+    progress("worker_failed", task, error=message)
+    failed = task.model_copy(update={"status": "failed", "error": message})
+    return Command(update={"tasks": {task.id: failed}}, goto="dispatch")

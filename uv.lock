@@ -2517,6 +2517,7 @@ name = "webkiln-agents"
 version = "0.1.0"
 source = { editable = "agents" }
 dependencies = [
+    { name = "httpx" },
     { name = "langchain-google-genai" },
     { name = "langchain-groq" },
     { name = "langchain-huggingface" },
@@ -2533,6 +2534,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain-google-genai", specifier = ">=4.5.2" },
     { name = "langchain-groq", specifier = ">=1.2.1" },
     { name = "langchain-huggingface", specifier = ">=1.2.3" },
