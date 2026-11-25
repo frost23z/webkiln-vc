@@ -60,3 +60,14 @@ class TaskOutput(Base):
     task_id: Mapped[str] = mapped_column(primary_key=True)
     summary: Mapped[str]
     data: Mapped[dict[str, Any]] = mapped_column(JSONB)
+
+
+class SearchCacheRow(Base):
+    """Web search results by a hash of the query, so a re-run spends no search credits."""
+
+    __tablename__ = "search_cache"
+
+    key: Mapped[str] = mapped_column(primary_key=True)  # sha256 of the normalised query
+    query: Mapped[str]
+    results: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -23,6 +23,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         app.state.graph = build_graph(checkpointer=saver)  # Compile once at startup
         engine = create_engine()
         app.state.sessions = create_session_factory(engine)
+        # Tests bring their own context. A real run needs the sessions for the search cache.
+        app.state.context = app.state.given_context or build_context(app.state.sessions)
         app.state.supervisor = RunSupervisor(app.state.graph, app.state.sessions, app.state.context)
         try:
             await app.state.supervisor.resume_unfinished()
@@ -34,9 +36,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 def create_app(context: Context | None = None) -> FastAPI:
     """`context` is what runs get to work with. Tests pass fake workers, and the default is the
-    real ones."""
+    real ones, built at startup."""
     app = FastAPI(title="Webkiln API", lifespan=lifespan)
-    app.state.context = context or build_context()
+    app.state.given_context = context
 
     @app.get("/health")
     async def health() -> dict[str, str]:

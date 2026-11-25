@@ -10,7 +10,7 @@ def test_migration_creates_the_tables() -> None:
         columns = {c["name"] for c in inspect(engine).get_columns("tasks")}
     finally:
         engine.dispose()
-    assert {"projects", "runs", "tasks", "task_outputs"} <= tables
+    assert {"projects", "runs", "tasks", "task_outputs", "search_cache"} <= tables
     assert {"run_id", "id", "agent", "depends_on", "status", "attempts", "error"} <= columns
 
 
