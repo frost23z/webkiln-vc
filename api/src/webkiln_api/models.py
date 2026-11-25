@@ -4,12 +4,7 @@ from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel
 from webkiln_agents.core.schemas import Input
 
-RunStatus = Literal["created", "running", "completed", "failed"]
-
-
-class RunRecord(BaseModel):
-    brief: Input
-    status: RunStatus = "created"
+RunStatus = Literal["running", "completed", "failed"]
 
 
 class RunResponse(BaseModel):
@@ -19,12 +14,24 @@ class RunResponse(BaseModel):
 
 class RunDetail(RunResponse):
     brief: Input
-    state: dict[str, Any] | None  # None until the run has started
+    state: dict[str, Any] | None  # None until the run has its first checkpoint
 
 
 class RunSummary(RunResponse):
     brief: Input
-    updated_at: str  # ISO 8601 time of the run's latest checkpoint
+    updated_at: str  # ISO 8601 time of the run's last change
+
+
+class TaskReport(BaseModel):
+    """One task as saved in Postgres. `output` is the worker's full result, once it is done."""
+
+    task_id: str
+    agent: str
+    status: str
+    attempts: int
+    error: str | None
+    summary: str | None
+    output: dict[str, Any] | None
 
 
 def thread_config(thread_id: str) -> RunnableConfig:

@@ -1,43 +1,22 @@
-from collections.abc import Generator
 from uuid import UUID
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from webkiln_api.app import create_app
-
-BRIEF = {
-    "brand_name": "Cedar Stay",
-    "prompt": "A boutique hotel website with booking",
-    "niche": "Hospitality",
-}
+from support import BRIEF, api, run_to_the_end, start_run
 
 
-@pytest.fixture
-def app() -> FastAPI:
-    return create_app()
-
-
-@pytest.fixture
-def client(app: FastAPI) -> Generator[TestClient]:
-    with TestClient(app) as client:
-        yield client
-
-
-def test_valid_brief_returns_a_thread_id(client: TestClient) -> None:
-    response = client.post("/runs", json=BRIEF)
+def test_valid_brief_starts_a_run_and_returns_its_thread_id() -> None:
+    with api() as client:
+        response = client.post("/runs", json=BRIEF)
 
     assert response.status_code == 201
     body = response.json()
     UUID(body["thread_id"])  # raises if it is not a uuid
-    assert body["status"] == "created"
+    assert body["status"] == "running"
 
 
-def test_each_run_gets_its_own_thread_id(client: TestClient) -> None:
-    first = client.post("/runs", json=BRIEF).json()["thread_id"]
-    second = client.post("/runs", json=BRIEF).json()["thread_id"]
-
-    assert first != second
+def test_each_run_gets_its_own_thread_id() -> None:
+    with api() as client:
+        assert start_run(client) != start_run(client)
 
 
 @pytest.mark.parametrize(
@@ -49,39 +28,31 @@ def test_each_run_gets_its_own_thread_id(client: TestClient) -> None:
         ("niche", "n" * 81),
     ],
 )
-def test_invalid_brief_returns_422(client: TestClient, field: str, value: str) -> None:
-    response = client.post("/runs", json={**BRIEF, field: value})
+def test_invalid_brief_returns_422(field: str, value: str) -> None:
+    with api() as client:
+        response = client.post("/runs", json={**BRIEF, field: value})
 
     assert response.status_code == 422
 
 
-def test_missing_field_returns_422(client: TestClient) -> None:
-    response = client.post("/runs", json={"brand_name": "Cedar Stay"})
+def test_missing_field_returns_422() -> None:
+    with api() as client:
+        assert client.post("/runs", json={"brand_name": "Cedar Stay"}).status_code == 422
 
-    assert response.status_code == 422
 
+def test_get_run_returns_the_brief_and_the_graph_state() -> None:
+    with api() as client:
+        thread_id = run_to_the_end(client)
 
-def test_get_run_before_it_starts_has_no_state(client: TestClient) -> None:
-    thread_id = client.post("/runs", json=BRIEF).json()["thread_id"]
+        body = client.get(f"/runs/{thread_id}").json()
 
-    response = client.get(f"/runs/{thread_id}")
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["status"] == "created"
+    assert body["status"] == "completed"
     assert body["brief"] == BRIEF
-    assert body["state"] is None
+    assert body["state"]["initial_input"] == BRIEF
+    assert "brand_name" not in body["state"]  # input channels are not part of the declared state
+    assert {task["status"] for task in body["state"]["tasks"].values()} == {"done"}
 
 
-def test_get_run_returns_the_graph_state(client: TestClient) -> None:
-    thread_id = client.post("/runs", json=BRIEF).json()["thread_id"]
-    client.get(f"/runs/{thread_id}/stream")  # the stream route starts the run
-
-    state = client.get(f"/runs/{thread_id}").json()["state"]
-
-    assert state["initial_input"] == BRIEF
-    assert "brand_name" not in state  # input channels are not part of the declared state
-
-
-def test_get_unknown_run_returns_404(client: TestClient) -> None:
-    assert client.get("/runs/does-not-exist").status_code == 404
+def test_get_unknown_run_returns_404() -> None:
+    with api() as client:
+        assert client.get("/runs/does-not-exist").status_code == 404

@@ -1,111 +1,117 @@
-from typing import Annotated
+from typing import Annotated, cast
 from uuid import uuid7
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from langgraph.types import StateSnapshot
 from pydantic_core import to_jsonable_python
 from webkiln_agents.core.schemas import Input
+from webkiln_agents.manager.plan import Task
 from webkiln_agents.manager.state import State
 
-from webkiln_api.models import RunDetail, RunRecord, RunResponse, RunSummary, thread_config
+from webkiln_api import store
+from webkiln_api.models import RunDetail, RunResponse, RunSummary, TaskReport, thread_config
 from webkiln_api.openapi import ERROR_RESPONSES
-from webkiln_api.streaming import finished_events, run_events
+from webkiln_api.store import StoredRun
+from webkiln_api.streaming import finished_events
+from webkiln_api.supervisor import RunSupervisor
 
 router = APIRouter(prefix="/runs", tags=["runs"], responses=ERROR_RESPONSES)
 
 
-def record_from_snapshot(snapshot: StateSnapshot) -> RunRecord | None:
-    """Rebuild a run record from a saved checkpoint, or None when the thread has no run."""
-    brief = snapshot.values.get("initial_input")
-    if brief is None:
-        return None
-    # Nothing left to run means it finished. A pending step means the old process died mid-run.
-    return RunRecord(brief=brief, status="failed" if snapshot.next else "completed")
+def supervisor_of(request: Request) -> RunSupervisor:
+    return request.app.state.supervisor
 
 
-async def find_record(request: Request, thread_id: str) -> RunRecord | None:
-    """Return the run record, rebuilding it from the saved checkpoint after an API restart.
-
-    A run that was created but never started has no checkpoint, so a restart forgets it.
-    """
-    runs: dict[str, RunRecord] = request.app.state.runs
-    if thread_id not in runs:
-        snapshot = await request.app.state.graph.aget_state(thread_config(thread_id))
-        record = record_from_snapshot(snapshot)
-        if record is None:
-            return None
-        runs[thread_id] = record
-    return runs[thread_id]
+async def get_stored_run(request: Request, thread_id: str) -> StoredRun:
+    run = await store.find_run(request.app.state.sessions, thread_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return run
 
 
 @router.post("", status_code=201)
 async def create_run(brief: Input, request: Request) -> RunResponse:
+    """Save the run and start it in the background. Follow it with the stream route."""
     thread_id = str(uuid7())
-    record = RunRecord(brief=brief)
-    request.app.state.runs[thread_id] = record
-    return RunResponse(thread_id=thread_id, status=record.status)
+    await store.create_run_rows(request.app.state.sessions, thread_id, brief)
+    supervisor_of(request).start(thread_id, brief)
+    return RunResponse(thread_id=thread_id, status="running")
 
 
 @router.get("")
 async def list_runs(
     request: Request, limit: Annotated[int, Query(ge=1, le=50)] = 20
 ) -> list[RunSummary]:
-    """The saved runs, newest first."""
-    graph = request.app.state.graph
-    # The saver lists checkpoints newest first, so a thread's first hit is its latest.
-    latest: dict[str, str] = {}
-    async for saved in graph.checkpointer.alist(None):
-        thread_id = saved.config["configurable"]["thread_id"]
-        if thread_id not in latest:
-            latest[thread_id] = saved.checkpoint["ts"]
-            if len(latest) == limit:
-                break
-
-    summaries = list[RunSummary]()
-    for thread_id, updated_at in latest.items():
-        record = await find_record(request, thread_id)
-        if record is not None:
-            summaries.append(
-                RunSummary(
-                    thread_id=thread_id,
-                    status=record.status,
-                    brief=record.brief,
-                    updated_at=updated_at,
-                )
-            )
-    return summaries
+    """The saved runs, changed most recently first."""
+    runs = await store.list_runs(request.app.state.sessions, limit)
+    return [
+        RunSummary(
+            thread_id=run.thread_id,
+            status=run.status,
+            brief=run.brief,
+            updated_at=run.updated_at.isoformat(),
+        )
+        for run in runs
+    ]
 
 
 @router.get("/{thread_id}")
 async def get_run(thread_id: str, request: Request) -> RunDetail:
-    record = await find_record(request, thread_id)
-    if record is None:
-        raise HTTPException(status_code=404, detail="Run not found")
+    run = await get_stored_run(request, thread_id)
     snapshot = await request.app.state.graph.aget_state(thread_config(thread_id))
     # Only the fields the graph state declares. Pydantic objects become plain JSON.
     values = {k: v for k, v in snapshot.values.items() if k in State.model_fields}
     return RunDetail(
         thread_id=thread_id,
-        status=record.status,
-        brief=record.brief,
+        status=run.status,
+        brief=run.brief,
         state=to_jsonable_python(values) if values else None,
     )
 
 
 @router.get("/{thread_id}/stream")
 async def stream_run(thread_id: str, request: Request) -> StreamingResponse:
-    """Start the run and stream its progress as server-sent events."""
-    record = await find_record(request, thread_id)
-    if record is None:
-        raise HTTPException(status_code=404, detail="Run not found")
-    if record.status == "running":
-        raise HTTPException(status_code=409, detail="Run is already streaming")
+    """Follow a run as server-sent events.
 
-    if record.status == "created":
-        record.status = "running"  # set here, so a second connection is refused at once
-        events = run_events(request.app.state.graph, record, thread_id, request.app.state.sessions)
-    else:
-        events = finished_events(record)
+    A run that is still going sends its events so far and then the live ones, so this can be
+    called again after a page refresh. A run that is not going only sends `done`.
+    """
+    run = await get_stored_run(request, thread_id)
+    channel = supervisor_of(request).channels.get(thread_id)
+    events = channel.subscribe() if channel else finished_events(run.status)
     headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     return StreamingResponse(events, media_type="text/event-stream", headers=headers)
+
+
+@router.post("/{thread_id}/retry", status_code=202)
+async def retry_run(thread_id: str, request: Request) -> RunResponse:
+    """Run the failed tasks again. Finished tasks are not repeated."""
+    run = await get_stored_run(request, thread_id)
+    supervisor = supervisor_of(request)
+    if run.status != "failed" or supervisor.is_running(thread_id):
+        raise HTTPException(status_code=409, detail="Only a failed run can be retried")
+    graph = request.app.state.graph
+    snapshot = await graph.aget_state(thread_config(thread_id))
+    tasks = cast(dict[str, Task], snapshot.values.get("tasks", {}))
+    failed = {
+        task.id: task.model_copy(update={"status": "pending", "error": None})
+        for task in tasks.values()
+        if task.status == "failed"
+    }
+    if failed:
+        # Written as the node that precedes `dispatch`, so `dispatch` is the next step.
+        await graph.aupdate_state(thread_config(thread_id), {"tasks": failed}, as_node="run_worker")
+    elif not snapshot.next:
+        raise HTTPException(status_code=409, detail="The run has nothing to retry")
+    await store.set_status(request.app.state.sessions, thread_id, "running")
+    supervisor.start(thread_id, None)
+    return RunResponse(thread_id=thread_id, status="running")
+
+
+@router.get("/{thread_id}/tasks/{task_id}")
+async def get_task_report(thread_id: str, task_id: str, request: Request) -> TaskReport:
+    """One task's saved result: its summary and the worker's full output."""
+    report = await store.find_report(request.app.state.sessions, thread_id, task_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return report

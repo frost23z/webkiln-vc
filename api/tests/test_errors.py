@@ -1,8 +1,5 @@
-from collections.abc import Generator
-
-import pytest
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from support import api, run_to_the_end
 from webkiln_api.app import create_app
 
 BRIEF = {
@@ -10,13 +7,6 @@ BRIEF = {
     "prompt": "A boutique hotel website with booking",
     "niche": "Hospitality",
 }
-
-
-@pytest.fixture
-def app_with_run() -> Generator[tuple[FastAPI, str]]:
-    app = create_app()
-    with TestClient(app) as client:
-        yield app, client.post("/runs", json=BRIEF).json()["thread_id"]
 
 
 def test_unknown_run_is_a_json_not_found_error() -> None:
@@ -45,11 +35,11 @@ def test_invalid_brief_lists_the_fields_without_echoing_values() -> None:
     assert '"input"' not in response.text
 
 
-def test_running_run_gives_a_conflict_error(app_with_run: tuple[FastAPI, str]) -> None:
-    app, thread_id = app_with_run
-    app.state.runs[thread_id].status = "running"
+def test_retry_of_a_run_that_did_not_fail_gives_a_conflict_error() -> None:
+    with api() as client:
+        thread_id = run_to_the_end(client)
 
-    response = TestClient(app).get(f"/runs/{thread_id}/stream")
+        response = client.post(f"/runs/{thread_id}/retry")
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "conflict"
