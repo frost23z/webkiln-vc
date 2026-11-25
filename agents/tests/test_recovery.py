@@ -2,9 +2,10 @@ import asyncio
 from collections import Counter
 
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command
 from webkiln_agents.manager.context import Context, run_config
 from webkiln_agents.manager.graph import build_graph
-from webkiln_agents.testing import SAMPLE_BRIEF, fake_context, fake_worker, fake_workers
+from webkiln_agents.testing import APPROVE, SAMPLE_BRIEF, fake_context, fake_worker, fake_workers
 from webkiln_agents.workers.base import WorkerInput, WorkerResult
 
 RESEARCH = {"audience", "competitor", "niche", "seo"}
@@ -48,11 +49,28 @@ async def test_resume_after_a_crash_runs_only_the_unfinished_workers() -> None:
     second = fake_context(workers=dict.fromkeys(fake_workers(), counts))
     result = await build_graph(saver).ainvoke(None, config, context=second, durability="sync")
 
-    assert {task.status for task in result["tasks"].values()} == {"done"}
+    # The brand is written, and the run waits for the user before the wireframe.
+    statuses = {task.id: task.status for task in result["tasks"].values()}
+    assert statuses == {
+        **dict.fromkeys(RESEARCH | {"brand"}, "done"),
+        "wireframe": "pending",
+        "generate": "pending",
+    }
     assert {agent: calls[agent] for agent in RESEARCH} == {
         "audience": 1,
         "competitor": 1,
         "niche": 1,
         "seo": 2,  # started once before the crash, once after
+    }
+    assert calls["brand"] == 1
+    assert calls["wireframe"] == calls["generate"] == 0
+
+    # Approving on the same thread finishes the run without repeating any finished work.
+    final = await build_graph(saver).ainvoke(
+        Command(resume=APPROVE), config, context=second, durability="sync"
+    )
+    assert {task.status for task in final["tasks"].values()} == {"done"}
+    assert {agent: calls[agent] for agent in RESEARCH} == {
+        a: 2 if a == "seo" else 1 for a in RESEARCH
     }
     assert calls["brand"] == calls["wireframe"] == calls["generate"] == 1

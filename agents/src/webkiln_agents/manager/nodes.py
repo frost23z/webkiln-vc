@@ -7,6 +7,8 @@ from langgraph.types import Command, Send
 
 from webkiln_agents.core.schemas import Input
 from webkiln_agents.manager.analysis import analyze_brief
+from webkiln_agents.manager.approval import awaiting_brand_review
+from webkiln_agents.manager.catalog import CATALOG
 from webkiln_agents.manager.context import Context
 from webkiln_agents.manager.default_plan import default_plan
 from webkiln_agents.manager.failures import apply_decision, ask_manager, enforce
@@ -58,7 +60,9 @@ def worker_packet(task: Task, state: State) -> WorkerInput:
     }
 
 
-def dispatch(state: State, runtime: Runtime[Context]) -> Command[Literal["run_worker", "__end__"]]:
+def dispatch(
+    state: State, runtime: Runtime[Context]
+) -> Command[Literal["run_worker", "brand_review", "__end__"]]:
     """The scheduler. Marks every ready task `running` and starts them in one atomic step.
 
     The update and the `Send` objects are one result, so a crash cannot leave a task started but
@@ -66,8 +70,15 @@ def dispatch(state: State, runtime: Runtime[Context]) -> Command[Literal["run_wo
     per wave, after the last of them. A ready task whose agent has no worker is left `pending`.
     """
     workers = runtime.context.workers if runtime.context else {}
-    ready = [task for task in ready_tasks(state.tasks) if task.agent in workers]
+    ready = [
+        task
+        for task in ready_tasks(state.tasks)
+        if task.agent in workers
+        and (state.brand_approved or not CATALOG[task.agent].needs_approval)
+    ]
     if not ready:
+        if awaiting_brand_review(state):
+            return Command(goto="brand_review")
         return Command(goto="__end__")  # END, written as a literal so the return type checks
     running = {
         task.id: task.model_copy(
@@ -75,7 +86,12 @@ def dispatch(state: State, runtime: Runtime[Context]) -> Command[Literal["run_wo
         )
         for task in ready
     }
-    sends = [Send("run_worker", worker_packet(task, state)) for task in running.values()]
+    # The packet is built from the task as it was before it started, so a task sent back for
+    # rework still shows as `needs_rework` and gets its last answer. The worker sees `running`.
+    sends = [
+        Send("run_worker", {**worker_packet(task, state), "task": running[task.id].model_dump()})
+        for task in ready
+    ]
     return Command(update={"tasks": running}, goto=sends)
 
 

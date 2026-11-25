@@ -4,11 +4,13 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from langchain_core.messages import BaseMessage
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command
 from pydantic import BaseModel
 
 from webkiln_agents.llm import LLMProvider
 from webkiln_agents.manager.catalog import CATALOG
-from webkiln_agents.manager.context import Context
+from webkiln_agents.manager.context import Context, run_config
 from webkiln_agents.workers.base import Worker, WorkerInput, WorkerResult
 
 SAMPLE_BRIEF = {
@@ -98,3 +100,23 @@ def fake_context(
         llm=llm,
         max_concurrency=max_concurrency,
     )
+
+
+APPROVE = {"action": "approve"}
+
+
+async def run_approved(
+    context: Context, brief: Mapping[str, Any] = SAMPLE_BRIEF, *, thread_id: str = "test"
+) -> dict[str, Any]:
+    """Run the graph to the end, approving the brand when the run pauses for review.
+
+    Returns the final state values. The import is here because `graph` needs this module's peers.
+    """
+    from webkiln_agents.manager.graph import build_graph
+
+    graph = build_graph(InMemorySaver())
+    config = run_config(context, thread_id)
+    await graph.ainvoke(dict(brief), config, context=context)
+    while (await graph.aget_state(config)).interrupts:
+        await graph.ainvoke(Command(resume=APPROVE), config, context=context)
+    return (await graph.aget_state(config)).values

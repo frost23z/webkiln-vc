@@ -2,7 +2,7 @@ from collections import Counter
 from typing import Any
 
 import pytest
-from webkiln_agents.manager.context import Context, run_config
+from webkiln_agents.manager.context import Context
 from webkiln_agents.manager.failures import (
     MAX_REWORKS,
     FailureDecision,
@@ -11,10 +11,15 @@ from webkiln_agents.manager.failures import (
     can_retry,
     enforce,
 )
-from webkiln_agents.manager.graph import build_graph
 from webkiln_agents.manager.plan import Task
 from webkiln_agents.models import ConfigError
-from webkiln_agents.testing import SAMPLE_BRIEF, FakeLLM, fake_context, fake_worker, fake_workers
+from webkiln_agents.testing import (
+    FakeLLM,
+    fake_context,
+    fake_worker,
+    fake_workers,
+    run_approved,
+)
 from webkiln_agents.workers.base import WorkerInput, WorkerResult
 from webkiln_agents.workers.errors import WorkerOutputError
 
@@ -55,7 +60,7 @@ def failing(
 
 async def run(workers: dict[str, Any], llm: FakeLLM | None) -> dict[str, Any]:
     context = fake_context(workers=workers, llm=llm)
-    return await build_graph().ainvoke(SAMPLE_BRIEF, run_config(context), context=context)
+    return await run_approved(context)
 
 
 async def test_a_retry_with_a_new_instruction_runs_only_that_worker_again() -> None:

@@ -6,6 +6,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import RetryPolicy, TimeoutPolicy
 
 from webkiln_agents.core.schemas import Input
+from webkiln_agents.manager.approval import brand_review, manager_feedback
 from webkiln_agents.manager.context import Context
 from webkiln_agents.manager.nodes import (
     analyze,
@@ -40,6 +41,8 @@ def build_graph(
     builder.add_node("analyze", analyze)
     builder.add_node("dispatch", dispatch)
     builder.add_node("review_failures", review_failures)
+    builder.add_node("brand_review", brand_review)
+    builder.add_node("manager_feedback", manager_feedback)
     # LangGraph's type hints have no handler that takes `error: NodeError`, but it injects it.
     builder.add_node(  # pyrefly: ignore[no-matching-overload]
         "run_worker",

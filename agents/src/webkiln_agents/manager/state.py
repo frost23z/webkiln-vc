@@ -1,3 +1,4 @@
+import operator
 from typing import Annotated, Any
 
 from langchain_core.messages import AnyMessage
@@ -22,3 +23,9 @@ class State(BaseModel):
     summaries: Annotated[dict[str, str], merge_dicts] = Field(default_factory=dict)
     # The full validated output per finished task. The API saves it in Postgres.
     outputs: Annotated[dict[str, dict[str, Any]], merge_dicts] = Field(default_factory=dict)
+    # The user's decisions on the brand guideline, oldest first. The API saves them as versions.
+    brand_reviews: Annotated[list[dict[str, Any]], operator.add] = Field(default_factory=list)
+    # The wireframe and everything after it stay blocked until this is true.
+    brand_approved: bool = False
+    # Feedback on its way from `brand_review` to `manager_feedback`.
+    pending_feedback: str | None = None

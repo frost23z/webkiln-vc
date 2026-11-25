@@ -4,14 +4,20 @@ from typing import Any, cast
 
 from webkiln_agents.manager.context import Context, run_config
 from webkiln_agents.manager.graph import build_graph
-from webkiln_agents.testing import SAMPLE_BRIEF, fake_context, fake_worker, fake_workers
+from webkiln_agents.testing import (
+    SAMPLE_BRIEF,
+    fake_context,
+    fake_worker,
+    fake_workers,
+    run_approved,
+)
 from webkiln_agents.workers.base import WorkerInput, WorkerResult
 
 RESEARCH = ["audience", "competitor", "niche", "seo"]
 
 
 async def run(context: Context) -> dict[str, Any]:
-    return await build_graph().ainvoke(SAMPLE_BRIEF, run_config(context), context=context)
+    return await run_approved(context)
 
 
 async def steps(context: Context) -> dict[int, list[str]]:
