@@ -1,7 +1,8 @@
 from datetime import datetime
+from typing import Any
 from uuid import UUID, uuid7
 
-from sqlalchemy import DateTime, ForeignKey, func
+from sqlalchemy import DateTime, ForeignKey, ForeignKeyConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -27,8 +28,10 @@ class Run(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid7)
     project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id"))
     thread_id: Mapped[str] = mapped_column(unique=True)
-    phase: Mapped[str] = mapped_column(default="planning")
     status: Mapped[str]
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class TaskRow(Base):
@@ -45,4 +48,15 @@ class TaskRow(Base):
     depends_on: Mapped[list[str]] = mapped_column(JSONB, default=list)
     attempts: Mapped[int] = mapped_column(default=0)
     error: Mapped[str | None]
-    output_ref: Mapped[str | None]
+
+
+class TaskOutput(Base):
+    """The full validated output of a finished task. It shares the task's key."""
+
+    __tablename__ = "task_outputs"
+    __table_args__ = (ForeignKeyConstraint(["run_id", "task_id"], ["tasks.run_id", "tasks.id"]),)
+
+    run_id: Mapped[UUID] = mapped_column(primary_key=True)
+    task_id: Mapped[str] = mapped_column(primary_key=True)
+    summary: Mapped[str]
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB)
