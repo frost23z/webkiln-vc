@@ -1,6 +1,8 @@
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+from langchain_core.runnables import RunnableConfig
+
 from webkiln_agents.llm import LLMProvider
 from webkiln_agents.workers.base import Worker
 
@@ -16,3 +18,11 @@ class Context:
     workers: Mapping[str, Worker] = field(default_factory=dict)
     llm: LLMProvider | None = None
     max_concurrency: int = 4
+
+
+def run_config(context: Context, thread_id: str | None = None) -> RunnableConfig:
+    """The config to run the graph with. LangGraph reads the concurrency cap from here."""
+    config: RunnableConfig = {"max_concurrency": context.max_concurrency}
+    if thread_id is not None:
+        config["configurable"] = {"thread_id": thread_id}
+    return config
