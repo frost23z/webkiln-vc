@@ -19,3 +19,6 @@ db-migrate:
 
 db-revision message:
   uv run --directory api --package webkiln-api alembic revision --autogenerate -m "{{message}}"
+
+check-structured-output:
+  uv run --directory agents --package webkiln-agents check-structured-output
