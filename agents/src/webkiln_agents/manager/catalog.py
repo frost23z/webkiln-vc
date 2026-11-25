@@ -10,6 +10,8 @@ class AgentSpec:
     after: tuple[AgentName, ...] = ()
     # The run can go on without this agent's result. Its dependents are told it was skipped.
     skippable: bool = False
+    # The agent starts only after the user has approved the brand guideline.
+    needs_approval: bool = False
 
 
 CATALOG: dict[AgentName, AgentSpec] = {
@@ -28,11 +30,17 @@ CATALOG: dict[AgentName, AgentSpec] = {
             "Writes the brand guideline: tone, colours, typography.",
             after=("niche", "audience", "competitor", "seo"),
         ),
-        AgentSpec("wireframe", "Plans the pages and sections of the site.", after=("brand",)),
+        AgentSpec(
+            "wireframe",
+            "Plans the pages and sections of the site.",
+            after=("brand",),
+            needs_approval=True,
+        ),
         AgentSpec(
             "generate",
             "Writes the website files from the wireframe and brand.",
             after=("wireframe",),
+            needs_approval=True,
         ),
     ]
 }
