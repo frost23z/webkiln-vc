@@ -16,11 +16,25 @@ API restart. After the approval the wireframe agent plans the pages and sections
 step writes the copy of every page (one model call per page) and the notes for the pictures. Code
 renders the pages from templates and checks the site before it is saved as version 1.
 
+The finished site opens in a preview beside a chat. You can ask for a change in words: new words
+for one section, new colours or fonts, a section added or removed, or a new page. One Manager call
+reads the message with the last six chat turns and a line for each earlier edit, and code checks
+the result against the site before anything is written. Every change is saved as a new version
+that holds only the files that differ, you can open any version and restore it (a restore is a new
+version too), and an edit made against an older version than the current one is refused. The
+preview is a sandboxed iframe. A question, an unclear message and a refused edit are answered in
+the chat and make no version. An edit that is cut off by an API restart is finished when the API
+starts again.
+
 The system also has a long-term memory, kept in Postgres with pgvector. When you approve the brand,
 or ask for changes, it keeps the approved guideline, the research summaries, your hand edits, your
 words and any lasting preferences it finds in them. A new run, even for another project, starts the
 brand agent with the preferences and the project's own history, and the progress lines say what was
-remembered. A changed fact becomes a new version and the old one is kept. Memory belongs to one
+remembered. The memory also keeps the approved brand and the site's architecture (pages, sections
+and menu) in one slot each. A colour or font edit, a structure edit and a restore replace the slot,
+so a later session never recalls a colour or a page that the site no longer has, and the old
+versions are kept. The chat router and the section writer read it when they work on an edit, and an
+edit's decision and any lasting preference in the message are saved. A changed fact becomes a new version and the old one is kept. Memory belongs to one
 browser: the UI makes an id once, keeps it in `localStorage` and sends it as `X-User-Id`. It is not
 a login, and a run with no id has no memory. Memory is on when `GOOGLE_API_KEYS` is set, because the
 embeddings come from Google, and off otherwise.
@@ -84,8 +98,13 @@ pnpm --dir ui exec tsc --noEmit && pnpm --dir ui lint
   `just check-structured-output` with your keys before the first real run.
 - The memory has only been tested with fake embeddings and fake models. The 0.8 similarity at which
   a preference replaces an older one was tuned with `just check-memory` on six sentence pairs
-  only, so it may need another look with more real preferences. Only the brand agent reads memory, and it is not yet read when the site
-  is edited.
+  only, so it may need another look with more real preferences. The golden-query tests use fake embeddings, so they check the
+  pipeline and say nothing about how well the real model ranks. The brand agent, the Manager's
+  feedback node and the edit router and writer read memory. The chat history is not summarised by
+  a model: the router reads the last six turns and a one-line digest of each earlier edit (the
+  newest 30), so a long session can still lose the wording of a very old message.
+- Chat edits cannot yet change the SEO of a page, the layout of a section or an image. The router
+  says so and changes nothing.
 - The site is plain HTML and CSS. Pictures are placeholders that keep a prompt and alt text for a
   real image later. The forms the wireframe asks for are drawn but post nowhere, because the
   site has no backend. Prices and testimonials in the copy are examples for the owner to replace,
