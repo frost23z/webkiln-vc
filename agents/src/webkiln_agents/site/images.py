@@ -13,6 +13,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from webkiln_agents.site.vocabulary import rule_for
 
 ASPECTS = {"hero": "16:9", "about": "4:3", "gallery": "1:1"}
+# A site has at most 5 pages, and a gallery alone holds 3 slots, so 12 was too few.
+MAX_NOTES = 60
 
 
 @dataclass(frozen=True)
@@ -36,7 +38,7 @@ class ImageNote(BaseModel):
 
 
 class ImagePlan(BaseModel):
-    images: list[ImageNote] = Field(max_length=12)
+    images: list[ImageNote] = Field(max_length=MAX_NOTES)
 
     model_config = ConfigDict(extra="forbid")
 
