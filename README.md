@@ -15,6 +15,15 @@ positioning by hand, or ask for changes in words (up to four rounds). The paused
 API restart. The wireframe and generation agents come in later milestones, so a run ends after the
 approval for now.
 
+The system also has a long-term memory, kept in Postgres with pgvector. When you approve the brand,
+or ask for changes, it keeps the approved guideline, the research summaries, your hand edits, your
+words and any lasting preferences it finds in them. A new run, even for another project, starts the
+brand agent with the preferences and the project's own history, and the progress lines say what was
+remembered. A changed fact becomes a new version and the old one is kept. Memory belongs to one
+browser: the UI makes an id once, keeps it in `localStorage` and sends it as `X-User-Id`. It is not
+a login, and a run with no id has no memory. Memory is on when `GOOGLE_API_KEYS` is set, because the
+embeddings come from Google, and off otherwise.
+
 ## Requirements
 
 Python 3.14 with [uv](https://docs.astral.sh/uv/), Node.js with [pnpm](https://pnpm.io/),
@@ -33,11 +42,17 @@ Python 3.14 with [uv](https://docs.astral.sh/uv/), Node.js with [pnpm](https://p
    pnpm --dir ui install
    ```
 
-4. Check that your keys and model IDs work (free-tier model IDs change often):
+4. Check that your keys and model IDs work (free-tier model IDs change often), and that the
+   embeddings behave as the memory expects:
 
    ```bash
    just check-structured-output
+   just check-memory
    ```
+
+   `check-memory` embeds a few pairs of sentences with your Google key and prints how similar each
+   pair is. Use it to tune `SUPERSEDE_ABOVE` in `agents/src/webkiln_agents/memory/service.py`, the
+   similarity at which a new preference replaces an old one.
 
 ## Run
 
@@ -66,6 +81,10 @@ pnpm --dir ui exec tsc --noEmit && pnpm --dir ui lint
 
 - Nothing here has been run against the live providers by the build process. Run
   `just check-structured-output` with your keys before the first real run.
+- The memory has only been tested with fake embeddings and fake models. The 0.9 similarity at which
+  a preference replaces an older one is not tuned for the real embedding model: run
+  `just check-memory` first. Only the brand agent reads memory, and it is not yet read when the site
+  is edited.
 - Only the research and brand agents have workers. The wireframe and the site arrive in the next
   milestones, so an approved run ends with those tasks still pending.
 - The approval card and the resume endpoint have only been tested with fake models, not in a

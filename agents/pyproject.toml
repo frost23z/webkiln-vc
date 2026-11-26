@@ -24,6 +24,7 @@ dependencies = [
   "pydantic>=2.14.3",
   "pydantic-settings>=2.16.3",
 ]
+scripts.check-memory = "webkiln_agents.scripts:check_memory"
 scripts.check-structured-output = "webkiln_agents.scripts:check_structured_output"
 scripts.webkiln-agents = "webkiln_agents:main"
 

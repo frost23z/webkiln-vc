@@ -22,3 +22,6 @@ db-revision message:
 
 check-structured-output:
   uv run --directory agents --package webkiln-agents check-structured-output
+
+check-memory:
+  uv run --directory agents --package webkiln-agents check-memory
