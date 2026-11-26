@@ -58,6 +58,10 @@ from webkiln_agents.workers.wireframe import Section
 
 logger = logging.getLogger(__name__)
 
+# The nodes of an edit. A run whose pending step is one of them is handling a chat message.
+EDIT_NODES = frozenset(
+    {"edit_router", "edit_content", "edit_design", "edit_structure", "remember_edit"}
+)
 HISTORY_TURNS = 6  # earlier messages the Manager reads, so "the same as before" can be resolved
 RECALLED = 3  # remembered lines given to the Manager
 Next = Literal["edit_content", "edit_design", "edit_structure", "__end__"]

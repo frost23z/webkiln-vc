@@ -299,10 +299,19 @@ export function Workspace() {
      */
     async function sendEdit(text: string) {
         if (!run || latest === null) return
+        if (pinned !== null && pinned !== latest) {
+            // Changes always go on from the newest version, so say so instead of sending a
+            // message that the API would refuse as out of date.
+            setError(
+                `You are looking at version ${pinned}. Go back to version ${latest}, or restore ` +
+                    `version ${pinned}, before asking for a change.`
+            )
+            return
+        }
         setError(null)
         setPending(text)
         try {
-            await sendMessage(run.thread_id, text, pinned ?? latest)
+            await sendMessage(run.thread_id, text, latest)
             setPinned(null)
             await follow(run.thread_id)
             await reloadSite(run.thread_id)

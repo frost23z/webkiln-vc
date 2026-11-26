@@ -8,7 +8,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 from webkiln_agents.core.schemas import Input
 from webkiln_agents.manager.context import Context, run_config
-from webkiln_agents.manager.editing import edit_command
+from webkiln_agents.manager.editing import EDIT_NODES, edit_command
 from webkiln_agents.manager.review import ReviewDecision
 from webkiln_agents.manager.state import State
 
@@ -56,10 +56,11 @@ class RunSupervisor:
         self.channels = dict[str, RunChannel]()
         self._tasks = set[asyncio.Task[None]]()
 
-    def start(self, thread_id: str, brief: Input | None) -> None:
+    def start(self, thread_id: str, brief: Input | None, editing: bool = False) -> None:
         """Run in the background. With a brief the run begins, and without one it resumes from
-        its checkpoint."""
-        self._launch(thread_id, brief.model_dump() if brief else None)
+        its checkpoint. `editing` says the run is handling a chat message, so a failure leaves it
+        finished instead of failed."""
+        self._launch(thread_id, brief.model_dump() if brief else None, editing=editing)
 
     def resume(self, thread_id: str, decision: ReviewDecision) -> None:
         """Answer the review the run is waiting at. The graph carries on from its interrupt."""
@@ -186,7 +187,9 @@ class RunSupervisor:
                 elif snapshot.interrupts:
                     await self.sync(run.thread_id, "waiting")
                 elif snapshot.next:
-                    self.start(run.thread_id, None)
+                    # A step left in an edit node is an edit that the stop cut off.
+                    editing = not EDIT_NODES.isdisjoint(snapshot.next)
+                    self.start(run.thread_id, None, editing=editing)
                 else:
                     await self.sync(run.thread_id, status_of(snapshot))
             except Exception:

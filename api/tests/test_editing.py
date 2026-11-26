@@ -1,7 +1,10 @@
 """Chat edits, versions, restore and the preview, through the real API and graph on fake models."""
 
+import asyncio
+import threading
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -19,6 +22,7 @@ from webkiln_agents.testing import (
 )
 from webkiln_agents.workers.base import WorkerResult
 from webkiln_agents.workers.generate import generate_worker
+from webkiln_api.supervisor import RunSupervisor
 from webkiln_api.tables import ChatMessage, Run, SiteFile
 
 WIREFRAME = sample_wireframe()
@@ -365,3 +369,70 @@ def test_a_message_that_breaks_the_graph_leaves_the_run_finished() -> None:
         assert client.get(f"/runs/{thread_id}").json()["status"] == "completed"
         assert say(client, thread_id, "Try again").status_code == 202  # the lock is released
         finish(client, thread_id)
+
+
+class HangsOnTheWords(FakeEditLLM):
+    """A model that never answers the call that writes a section's words, as when the process is
+    stopped in the middle of an edit. `entered` is set once the call has started."""
+
+    def __init__(self, script: dict[str, list[Any]], entered: threading.Event) -> None:
+        super().__init__(script)
+        self.entered = entered
+
+    def structured(self, role: str, schema: Any) -> Any:
+        if schema.__name__ != "SectionCopy":
+            return super().structured(role, schema)
+        entered = self.entered
+
+        class Hangs:
+            async def ainvoke(self, _: Any) -> Any:
+                entered.set()
+                await _never()
+
+        return Hangs()
+
+
+async def _never() -> None:
+    await asyncio.Event().wait()
+
+
+def test_an_edit_cut_off_by_a_stop_is_finished_after_the_restart_without_asking_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entered = threading.Event()
+    stuck = edit_context({})
+    stuck.llm = HangsOnTheWords(
+        {"manager:EditIntent": [intent("content_edit", "Warmer heading", section=HERO)]}, entered
+    )
+    with api(stuck) as client:
+        thread_id = finished_site(client)
+        assert (
+            say(client, thread_id, "Make the hero heading warmer", base_version=1).status_code
+            == 202
+        )
+        assert entered.wait(10), "the edit never reached the writer"
+    # The first API is gone and its edit was cut off, so Postgres still says it is running.
+    assert saved_run(thread_id)[0].status == "running"
+
+    resumed = edit_context({"content:SectionCopy": hero_edit()["content:SectionCopy"]})
+    modes: list[bool] = []
+    original = RunSupervisor._run
+
+    async def spy(
+        self: RunSupervisor, thread_id: str, graph_input: Any, channel: Any, editing: bool = False
+    ):
+        modes.append(editing)
+        return await original(self, thread_id, graph_input, channel, editing)
+
+    monkeypatch.setattr(RunSupervisor, "_run", spy)
+    with api(resumed) as client:
+        # The startup sweep resumed the edit from its checkpoint. Following it ends when it is done.
+        assert finish(client, thread_id)[-1] == ("done", {"status": "completed"})
+        assert modes == [True]  # a failure now would leave the run finished, not failed
+        assert HEADLINE in page(client, thread_id, 2).text
+        assert [v["version"] for v in client.get(f"/runs/{thread_id}/versions").json()] == [2, 1]
+        chat = client.get(f"/runs/{thread_id}/messages").json()
+        assert chat[0]["role"] == "user"
+    assert isinstance(resumed.llm, FakeEditLLM)
+    assert resumed.llm.prompts_for("manager") == []  # the router did not read the message again
+    assert saved_run(thread_id)[0].status == "completed"
