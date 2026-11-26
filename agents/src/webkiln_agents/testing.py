@@ -377,6 +377,50 @@ class FakeLLM:
         ]
 
 
+EDIT_SCHEMAS = frozenset({"EditIntent", "SectionCopy", "DesignChange", "PageOrder"})
+
+
+class FakeEditLLM:
+    """A model for a whole session: a `FakeSiteLLM` builds the site, and a script answers the
+    calls an edit makes (`manager:EditIntent`, `content:SectionCopy`, `brand:DesignChange` and
+    `wireframe:PageOrder`). A new page is written by the site model, by its slug."""
+
+    def __init__(
+        self, script: Mapping[str, Sequence[Any]] | None = None, site: FakeSiteLLM | None = None
+    ) -> None:
+        self.site = site or FakeSiteLLM()
+        self.edits = FakeLLM(script)
+
+    def structured[T: BaseModel](self, role: str, schema: type[T]) -> Any:
+        if schema.__name__ in EDIT_SCHEMAS:
+            return self.edits.structured(role, schema)
+        return self.site.structured(role, schema)
+
+    def prompts_for(
+        self, role: str, schema: type[BaseModel] | None = None
+    ) -> list[list[BaseMessage]]:
+        return self.edits.prompts_for(role, schema)
+
+
+def site_context(llm: LLMProvider | None = None) -> Context:
+    """Fake research, brand and wireframe workers and the real `generate` on `llm`."""
+    from webkiln_agents.workers.generate import generate_worker
+
+    async def brand(*_: Any) -> WorkerResult:
+        return WorkerResult(summary="brand", data=SAMPLE_BRAND)
+
+    async def wireframe(*_: Any) -> WorkerResult:
+        return WorkerResult(summary="wireframe", data=sample_wireframe().model_dump(mode="json"))
+
+    workers = {
+        **fake_workers(),
+        "brand": brand,
+        "wireframe": wireframe,
+        "generate": generate_worker,
+    }
+    return fake_context(workers=workers, llm=llm or FakeSiteLLM())
+
+
 async def fake_worker(packet: WorkerInput, _: Context) -> WorkerResult:
     agent = packet["task"]["agent"]
     return WorkerResult(summary=f"{agent} summary", data={"agent": agent})

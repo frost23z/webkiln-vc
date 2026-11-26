@@ -29,3 +29,10 @@ class State(BaseModel):
     brand_approved: bool = False
     # Feedback on its way from `brand_review` to `manager_feedback`.
     pending_feedback: str | None = None
+    # The newest version of the site once an edit has made one (a `SiteHead` as a dict). Until
+    # then version 1 is the build in `outputs`. The files are in it, so the API never sends it.
+    site: dict[str, Any] | None = None
+    # The versions that edits made, oldest first (`SiteChange` dicts). The API saves them.
+    site_changes: Annotated[list[dict[str, Any]], operator.add] = Field(default_factory=list)
+    # The edit being handled: the version the user was looking at, and the Manager's reading.
+    edit_request: dict[str, Any] | None = None
