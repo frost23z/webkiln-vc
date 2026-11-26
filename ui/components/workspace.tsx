@@ -2,13 +2,13 @@
 
 import {
     ApiError,
+    continueRun,
     getChat,
     getRun,
     listRuns,
     listVersions,
     restoreVersion,
     resumeRun,
-    continueRun,
     retryRun,
     sendMessage,
     startRun,
@@ -63,6 +63,10 @@ export function Workspace() {
     const [starting, setStarting] = useState(false)
     // The saved runs, listed under the form.
     const [history, setHistory] = useState<RunSummary[]>([])
+    // Why the list could not be loaded, so an empty list is not mistaken for "no runs".
+    const [historyError, setHistoryError] = useState<string | null>(null)
+    // Bumped by the retry button to load the list again.
+    const [historyTry, setHistoryTry] = useState(0)
     // True while an answer to the brand review is on its way to the API.
     const [answering, setAnswering] = useState(false)
     // The chat about the finished site and its saved versions, as the API has them.
@@ -180,15 +184,19 @@ export function Workspace() {
         let cancelled = false
         listRuns()
             .then((runs) => {
-                if (!cancelled) setHistory(runs)
+                if (cancelled) return
+                setHistory(runs)
+                setHistoryError(null)
             })
-            .catch(() => {
-                // The list is only a shortcut, so the form works without it.
+            .catch((err) => {
+                // The list is only a shortcut, so the form works without it. The reason is shown
+                // so a list that failed to load is told apart from a database with no runs.
+                if (!cancelled) setHistoryError(errorText(err))
             })
         return () => {
             cancelled = true
         }
-    }, [formShown])
+    }, [formShown, historyTry])
 
     const threadId = run?.thread_id
     const site = parseSite(run?.state)
@@ -392,6 +400,18 @@ export function Workspace() {
                 <>
                     <BriefForm onSubmit={submit} busy={starting} />
                     <RunHistory runs={history} onOpen={openRun} />
+                    {historyError && (
+                        <p className='flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400'>
+                            Could not load earlier runs. {historyError}
+                            <button
+                                type='button'
+                                onClick={() => setHistoryTry((n) => n + 1)}
+                                className='rounded-md border border-zinc-300 px-3 py-1 font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900'
+                            >
+                                Try again
+                            </button>
+                        </p>
+                    )}
                 </>
             )}
             {error && (
