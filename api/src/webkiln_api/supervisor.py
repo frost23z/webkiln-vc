@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from dataclasses import replace
 from typing import Any
 
 from langgraph.graph.state import CompiledStateGraph
@@ -10,6 +11,7 @@ from webkiln_agents.manager.review import ReviewDecision
 from webkiln_agents.manager.state import State
 
 from webkiln_api import store
+from webkiln_api.memory import MemoryFactory
 from webkiln_api.models import RunStatus
 from webkiln_api.status import status_of
 from webkiln_api.store import Sessions
@@ -27,10 +29,17 @@ class RunSupervisor:
     every step (`durability="sync"`), so a run that was cut off can be resumed from it.
     """
 
-    def __init__(self, graph: Graph, sessions: Sessions, context: Context) -> None:
+    def __init__(
+        self,
+        graph: Graph,
+        sessions: Sessions,
+        context: Context,
+        memory: MemoryFactory | None = None,
+    ) -> None:
         self.graph = graph
         self.sessions = sessions
         self.context = context
+        self.memory = memory
         self.channels = dict[str, RunChannel]()
         self._tasks = set[asyncio.Task[None]]()
 
@@ -53,16 +62,33 @@ class RunSupervisor:
     def is_running(self, thread_id: str) -> bool:
         return thread_id in self.channels
 
+    async def _context_for(self, thread_id: str) -> Context:
+        """The shared context with this run's memory: the user and the project it belongs to.
+
+        A run with no user id, or an API with no memory store, runs without memory. A failure
+        here is logged and has the same result, because a run never depends on memory.
+        """
+        if self.memory is None:
+            return self.context
+        try:
+            run = await store.find_run(self.sessions, thread_id)
+            if run is not None and run.user_id:
+                return replace(self.context, memory=self.memory(run.user_id, run.project_id))
+        except Exception:
+            logger.exception("Could not set up the memory of run %s", thread_id)
+        return replace(self.context, memory=None)
+
     async def _run(
         self, thread_id: str, graph_input: dict[str, Any] | Command | None, channel: RunChannel
     ) -> None:
         config = run_config(self.context, thread_id)
         status: RunStatus = "failed"
         try:
+            context = await self._context_for(thread_id)
             async for chunk in self.graph.astream(
                 graph_input,
                 config,
-                context=self.context,
+                context=context,
                 stream_mode=["updates", "custom"],
                 version="v2",
                 durability="sync",

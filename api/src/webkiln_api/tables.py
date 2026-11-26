@@ -19,6 +19,9 @@ class Project(Base):
     niche: Mapped[str]
     prompt: Mapped[str]
     status: Mapped[str] = mapped_column(default="active")
+    # Who the project belongs to, as sent in `X-User-Id`. It scopes long-term memory, and a run
+    # with no user has no memory. Not a login: the API has no accounts yet.
+    user_id: Mapped[str | None] = mapped_column(index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

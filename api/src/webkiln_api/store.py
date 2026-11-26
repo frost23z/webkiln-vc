@@ -23,18 +23,31 @@ class StoredRun:
     status: RunStatus
     brief: Input
     updated_at: datetime
+    project_id: str = ""
+    user_id: str | None = None
 
 
 def stored_run(run: Run, project: Project) -> StoredRun:
     brief = Input(brand_name=project.brand_name, prompt=project.prompt, niche=project.niche)
-    return StoredRun(run.thread_id, cast(RunStatus, run.status), brief, run.updated_at)
+    return StoredRun(
+        run.thread_id,
+        cast(RunStatus, run.status),
+        brief,
+        run.updated_at,
+        str(project.id),
+        project.user_id,
+    )
 
 
-async def create_run_rows(sessions: Sessions, thread_id: str, brief: Input) -> None:
+async def create_run_rows(
+    sessions: Sessions, thread_id: str, brief: Input, user_id: str | None = None
+) -> None:
     """Save the project and its run. This happens before the graph starts, so a run that dies
     early is still there to list, to resume or to retry."""
     async with sessions.begin() as session:
-        project = Project(brand_name=brief.brand_name, niche=brief.niche, prompt=brief.prompt)
+        project = Project(
+            brand_name=brief.brand_name, niche=brief.niche, prompt=brief.prompt, user_id=user_id
+        )
         session.add(project)
         await session.flush()  # fills project.id, which the run points to
         session.add(Run(project_id=project.id, thread_id=thread_id, status="running"))

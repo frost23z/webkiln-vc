@@ -17,6 +17,9 @@ from webkiln_api.store import StoredRun
 from webkiln_api.streaming import finished_events
 from webkiln_api.supervisor import RunSupervisor
 
+# Becomes a namespace label in the memory store, which cannot hold a period.
+USER_ID_PATTERN = r"^[A-Za-z0-9_-]{1,100}$"
+
 router = APIRouter(prefix="/runs", tags=["runs"], responses=ERROR_RESPONSES)
 
 
@@ -32,10 +35,18 @@ async def get_stored_run(request: Request, thread_id: str) -> StoredRun:
 
 
 @router.post("", status_code=201)
-async def create_run(brief: Input, request: Request) -> RunResponse:
-    """Save the run and start it in the background. Follow it with the stream route."""
+async def create_run(
+    brief: Input,
+    request: Request,
+    user_id: Annotated[str | None, Header(alias="X-User-Id", pattern=USER_ID_PATTERN)] = None,
+) -> RunResponse:
+    """Save the run and start it in the background. Follow it with the stream route.
+
+    `X-User-Id` says whose long-term memory the run reads and writes (letters, digits, `_` and
+    `-`, up to 100). Without it the run has no memory.
+    """
     thread_id = str(uuid7())
-    await store.create_run_rows(request.app.state.sessions, thread_id, brief)
+    await store.create_run_rows(request.app.state.sessions, thread_id, brief, user_id)
     supervisor_of(request).start(thread_id, brief)
     return RunResponse(thread_id=thread_id, status="running")
 

@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from webkiln_agents.testing import SAMPLE_BRAND
+
 NICHE: dict[str, Any] = {
     "summary": "Boutique hotels sell atmosphere and service; direct booking and local story win.",
     "characteristics": ["Under 40 rooms", "Owner-led", "Strong local identity"],
@@ -80,33 +82,4 @@ COMPETITOR: dict[str, Any] = {
     "differentiation_opportunities": ["Local guides", "Direct-booking perks", "Honest photos"],
 }
 
-BRAND: dict[str, Any] = {
-    "summary": "Warm, calm boutique-hotel brand: deep green and gold, serif headings, local story.",
-    "positioning": "A small owner-led hotel where design, calm and local character come first.",
-    "personality_and_tone": {
-        "traits": ["warm", "calm", "refined"],
-        "voice": "Friendly and unhurried, like a host who knows the city well.",
-        "do": ["Use short sentences", "Name real places"],
-        "dont": ["Use hype words", "Shout in capitals"],
-    },
-    "messaging": {
-        "tagline": "Stay like you live here",
-        "value_proposition": "Book direct for the best rate, a late checkout and local tips.",
-        "key_messages": ["Owner-led", "Book direct and save", "Rooms with a story"],
-    },
-    "palette": {
-        "primary": "#1F4D3A",
-        "secondary": "#C9A24B",
-        "accent": "#8A5A44",
-        "background": "#FAF7F0",
-    },
-    "typography": {
-        "heading_font": "Playfair Display",
-        "body_font": "Inter",
-        "notes": "Playfair for headings and prices, Inter for everything else.",
-    },
-    "logo_direction": "A simple wordmark with a small cedar sprig, in the primary colour.",
-    "image_guidelines": ["Natural light", "Real rooms, no stock", "Warm, muted tones"],
-    "ui_ux_direction": ["Booking bar always visible", "Large photos", "Generous white space"],
-    "inspiration": ["Aesop store pages", "Kinfolk magazine layouts"],
-}
+BRAND: dict[str, Any] = SAMPLE_BRAND  # the sample lives in `testing`, shared with the API tests

@@ -45,3 +45,10 @@ def _migrated_test_database(_test_database: None) -> None:
     finally:
         del os.environ["DB_URL"]
         get_api_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _no_google_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A developer's `.env` may hold a Google key. Tests never use it: a test that wants memory
+    passes its own embeddings to `create_app`."""
+    monkeypatch.setattr("webkiln_api.app.embeddings_from_settings", lambda: None)
