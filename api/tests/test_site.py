@@ -41,7 +41,7 @@ def site_context() -> Context:
         "wireframe": wireframe_worker,
         "generate": generate_worker,
     }
-    return fake_context(workers=workers, llm=FakeSiteLLM())  # type: ignore[arg-type]
+    return fake_context(workers=workers, llm=FakeSiteLLM())
 
 
 def saved_site(thread_id: str) -> tuple[list[SiteVersion], dict[str, str]]:

@@ -279,13 +279,12 @@ class FakeSiteLLM:
         self.answered: set[str] = set()
         self.others_done = asyncio.Event()  # every call but the slow ones has been answered
 
-    def structured(self, role: str, schema: type) -> FakeSiteLLM:
-        self._role, self._schema = role, schema
-        return _Call(self, role, schema)  # type: ignore[return-value]
+    def structured[T: BaseModel](self, role: str, schema: type[T]) -> _Call[T]:
+        return _Call(self, role, schema)
 
 
-class _Call:
-    def __init__(self, llm: FakeSiteLLM, role: str, schema: type) -> None:
+class _Call[T: BaseModel]:
+    def __init__(self, llm: FakeSiteLLM, role: str, schema: type[T]) -> None:
         self.llm, self.role, self.schema = llm, role, schema
 
     def _answered(self, name: str) -> None:
@@ -293,8 +292,8 @@ class _Call:
         if self.llm.answered >= {"index", "rooms", "contact", "images"}:
             self.llm.others_done.set()
 
-    async def ainvoke(self, messages: list[Any]) -> Any:
-        text = "\n".join(str(m.content) for m in messages)
+    async def ainvoke(self, input: list[BaseMessage]) -> T | None:
+        text = "\n".join(str(m.content) for m in input)
         self.llm.prompts.append(text)
         if self.role == "images":
             self.llm.calls["images"] += 1

@@ -43,7 +43,7 @@ def generate_packet(instruction: str = "") -> Any:
 
 
 async def build(llm: FakeSiteLLM, **kw: str) -> SiteBuild:
-    result = await generate_worker(generate_packet(**kw), Context(llm=llm))  # type: ignore[arg-type]
+    result = await generate_worker(generate_packet(**kw), Context(llm=llm))
     return SiteBuild.model_validate(result.data)
 
 
@@ -104,7 +104,7 @@ async def test_it_needs_the_brand_and_the_wireframe() -> None:
     base = packet("generate")
     base["upstream"] = {"brand": SAMPLE_BRAND}
     with pytest.raises(Exception, match="wireframe"):
-        await generate_worker(base, Context(llm=FakeSiteLLM()))  # type: ignore[arg-type]
+        await generate_worker(base, Context(llm=FakeSiteLLM()))
 
 
 def test_the_registry_has_a_generate_worker() -> None:
@@ -120,7 +120,7 @@ async def test_a_crash_in_one_page_reruns_only_that_page_and_assemble() -> None:
     saver = InMemorySaver()
     config = run_config(Context(), "gen-recovery")
     first = FakeSiteLLM(slow={"offers"})  # `offers` never answers, like a process that dies
-    context = Context(llm=first, workers={"generate": generate_worker})  # type: ignore[arg-type]
+    context = Context(llm=first, workers={"generate": generate_worker})
     graph = _single_node_graph(saver)
     run = asyncio.create_task(
         graph.ainvoke(generate_packet(), config, context=context, durability="sync")
@@ -132,7 +132,7 @@ async def test_a_crash_in_one_page_reruns_only_that_page_and_assemble() -> None:
     await asyncio.gather(run, return_exceptions=True)
 
     second = FakeSiteLLM()
-    context = Context(llm=second, workers={"generate": generate_worker})  # type: ignore[arg-type]
+    context = Context(llm=second, workers={"generate": generate_worker})
     result = await graph.ainvoke(None, config, context=context, durability="sync")
     assert set(SiteBuild.model_validate(result["data"]).files) >= {"index.html"}
     assert second.calls["offers"] == 1  # the page that crashed
@@ -181,7 +181,7 @@ async def test_the_whole_run_builds_the_site_after_the_brand_is_approved() -> No
         "brand": brand,
         "generate": generate_worker,
     }
-    context = fake_context(workers=workers, llm=FakeSiteLLM())  # type: ignore[arg-type]
+    context = fake_context(workers=workers, llm=FakeSiteLLM())
     values = await run_approved(context, SAMPLE_BRIEF, thread_id="whole")
     assert values["tasks"]["generate"].status == "done"
     site = SiteBuild.model_validate(values["outputs"]["generate"])
@@ -192,7 +192,7 @@ async def test_the_whole_run_builds_the_site_after_the_brand_is_approved() -> No
 
 async def test_progress_events_reach_the_parent_stream() -> None:
     graph = _single_node_graph(InMemorySaver())
-    context = Context(llm=FakeSiteLLM())  # type: ignore[arg-type]
+    context = Context(llm=FakeSiteLLM())
     config = run_config(context, "events")
     events = [
         chunk
