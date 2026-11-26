@@ -7,12 +7,15 @@ back to the model with the reasons.
 """
 
 import re
+from collections.abc import Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from webkiln_agents.site.vocabulary import rule_for
 
 MAX_SECTION_WORDS = 220  # all the text of one section
+MARKUP = re.compile(r"</?[A-Za-z!][^>]*>")
+WORDS = re.compile(r"[a-z0-9]+")
 
 
 class Item(BaseModel):
@@ -56,8 +59,21 @@ class PageCopy(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-def copy_problems(section_ids_and_types: list[tuple[str, str]], copy: PageCopy) -> list[str]:
-    """What is wrong with a page's copy, given the page's `(section id, type)` pairs."""
+def _texts(section: SectionCopy) -> list[str]:
+    parts = [section.heading, section.subheading or "", section.body or ""]
+    for item in section.items:
+        parts += [item.title, item.text, item.meta or ""]
+    return parts
+
+
+def copy_problems(
+    section_ids_and_types: Sequence[tuple[str, str]], copy: PageCopy, keyword: str | None = None
+) -> list[str]:
+    """What is wrong with a page's copy, given the page's `(section id, type)` pairs.
+
+    `keyword` is the page's target keyword: its words must appear in the copy, because the site
+    check looks for them and a page that fails it after all the model calls were spent is a waste.
+    """
     expected = [section_id for section_id, _ in section_ids_and_types]
     got = [section.id for section in copy.sections]
     if got != expected:
@@ -83,4 +99,13 @@ def copy_problems(section_ids_and_types: list[tuple[str, str]], copy: PageCopy) 
             problems.append(
                 f"{section_id} has {section.words()} words, and the limit is {MAX_SECTION_WORDS}"
             )
+        if any(MARKUP.search(text) for text in _texts(section)):
+            problems.append(f"{section_id} has markup in it: write plain text, no HTML tags")
+    if keyword:
+        wanted = set(WORDS.findall(keyword.casefold()))
+        written = set(
+            WORDS.findall(" ".join(t for s in copy.sections for t in _texts(s)).casefold())
+        )
+        if wanted and not wanted <= written:
+            problems.append(f"the target keyword {keyword!r} is not used in the copy of the page")
     return problems

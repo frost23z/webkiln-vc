@@ -17,6 +17,7 @@ from webkiln_agents.manager.context import Context, run_config
 from webkiln_agents.memory.embeddings import EMBEDDING_DIMS, unit
 from webkiln_agents.site.vocabulary import rule_for
 from webkiln_agents.workers.base import Worker, WorkerInput, WorkerResult
+from webkiln_agents.workers.wireframe import Wireframe, WireframeDraft, finalize
 
 SAMPLE_BRIEF = {
     "brand_name": "Cedar Stay",
@@ -192,10 +193,13 @@ SAMPLE_WIREFRAME_DRAFT: dict[str, Any] = {
 }
 
 
-def sample_copy(sections: Sequence[tuple[str, str, str]]) -> dict[str, Any]:
+def sample_copy(
+    sections: Sequence[tuple[str, str, str]], keyword: str | None = None
+) -> dict[str, Any]:
     """Valid copy for a page, from its `(section id, type, title)` triples, whatever the types.
 
     It holds exactly what each type's rule asks for, so the generate and API tests can share it.
+    With a `keyword` (the page's target keyword), the first section's subheading uses it.
     """
     out = []
     for section_id, kind, title in sections:
@@ -213,7 +217,8 @@ def sample_copy(sections: Sequence[tuple[str, str, str]]) -> dict[str, Any]:
             {
                 "id": section_id,
                 "heading": title,
-                "subheading": f"A short line under {title}.",
+                "subheading": f"A short line under {title}."
+                + (f" About {keyword}." if keyword and not out else ""),
                 "body": "First paragraph of the copy.\n\nSecond paragraph of the copy."
                 if rule.body
                 else None,
@@ -221,6 +226,22 @@ def sample_copy(sections: Sequence[tuple[str, str, str]]) -> dict[str, Any]:
             }
         )
     return {"sections": out}
+
+
+def sample_wireframe() -> Wireframe:
+    """The sample wireframe as the wireframe worker saves it, with its section ids."""
+    return finalize(WireframeDraft.model_validate(SAMPLE_WIREFRAME_DRAFT))
+
+
+def sample_site_copy(wireframe: Wireframe | None = None) -> dict[str, dict[str, Any]]:
+    """Valid copy for every page of a wireframe, by page slug. Each page uses its keyword."""
+    frame = wireframe or sample_wireframe()
+    return {
+        page.slug: sample_copy(
+            [(s.id, s.type, s.title) for s in page.sections], page.seo.target_keyword
+        )
+        for page in frame.pages
+    }
 
 
 class FakeStructured[T: BaseModel]:
