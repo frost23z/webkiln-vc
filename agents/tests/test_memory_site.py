@@ -2,12 +2,16 @@
 
 from typing import Any
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.store.memory import InMemoryStore
 from test_edit_flow import HERO, Session, intent, memory_session, new_words
 from test_research import text_of
+from webkiln_agents.manager.graph import build_graph
 from webkiln_agents.manager.remember import ARCHITECTURE, BRAND, wireframe_sentence
 from webkiln_agents.memory.records import MemoryRecord
+from webkiln_agents.memory.service import Memory
 from webkiln_agents.site.edits import EditIntent
+from webkiln_agents.site.head import current_head
 from webkiln_agents.testing import FakeEditLLM, sample_wireframe
 
 PROJECT = ("user", "u1", "project", "p1")
@@ -118,3 +122,38 @@ async def test_a_run_without_memory_builds_and_edits_as_before() -> None:
     state = await session.ask("Remove the testimonials")
     assert state.site is not None
     assert state.site["version"] == 2
+
+
+async def test_an_edit_after_a_restart_stays_consistent_with_the_approved_brand() -> None:
+    """Scenario 9 across a restart: a new graph on the same checkpoints and a new `Memory` on the
+    same store. The edit changes the primary colour and nothing else of the approved brand."""
+    first, store = await built_with_memory({})
+    state = await first.state()
+    head = current_head(state.site, state.outputs)  # version 1: no edit has been saved yet
+    assert head is not None
+    palette, typography = head.brand["palette"], head.brand["typography"]
+
+    script = {
+        "manager:EditIntent": [intent("design_edit", "Make the primary colour a little darker")],
+        "brand:DesignChange": [{"primary": "#0b3d2e", "rationale": "A deeper green."}],
+    }
+    restarted = Session(FakeEditLLM(script), Memory(store, "u1", "p1"))
+    saver = first.graph.checkpointer
+    assert isinstance(saver, BaseCheckpointSaver)
+    restarted.graph = build_graph(saver)  # the process came back
+    state = await restarted.ask("Make the primary colour a little darker", base_version=1)
+
+    assert "(brand) Approved brand for Cedar Stay" in text_of(
+        restarted.llm.prompts_for("manager", EditIntent)[0]
+    )
+    assert state.site is not None
+    assert state.site["version"] == 2
+    new = state.site["brand"]["palette"]
+    assert new["primary"] == "#0b3d2e"
+    # The other colours are the approved ones. An edit writes colours in lower case.
+    assert {k: v.lower() for k, v in new.items() if k != "primary"} == {
+        k: v.lower() for k, v in palette.items() if k != "primary"
+    }
+    assert state.site["brand"]["typography"] == typography
+    [now] = current(await records(store, BRAND))
+    assert "primary #0b3d2e" in now.text  # and memory has followed the edit
