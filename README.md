@@ -9,8 +9,11 @@ agents on it. The repository holds three parts:
 
 What works today: the Manager analyses the brief, then the niche, audience, competitor and SEO
 research agents run in parallel, and the UI shows their progress and reports. When a worker fails,
-the Manager decides whether to retry it, skip it or ask you. The brand, wireframe and generation
-agents come in later milestones, so a run ends after the research wave for now.
+the Manager decides whether to retry it, skip it or ask you. The brand agent then writes a brand
+guideline and the run pauses for your decision: approve it, edit colours, fonts, tagline or
+positioning by hand, or ask for changes in words (up to four rounds). The paused run survives an
+API restart. The wireframe and generation agents come in later milestones, so a run ends after the
+approval for now.
 
 ## Requirements
 
@@ -63,4 +66,7 @@ pnpm --dir ui exec tsc --noEmit && pnpm --dir ui lint
 
 - Nothing here has been run against the live providers by the build process. Run
   `just check-structured-output` with your keys before the first real run.
-- Only the research wave has workers. The rest of the pipeline arrives in the next milestones.
+- Only the research and brand agents have workers. The wireframe and the site arrive in the next
+  milestones, so an approved run ends with those tasks still pending.
+- The approval card and the resume endpoint have only been tested with fake models, not in a
+  browser or against the live providers.
