@@ -81,9 +81,9 @@ pnpm --dir ui exec tsc --noEmit && pnpm --dir ui lint
 
 - Nothing here has been run against the live providers by the build process. Run
   `just check-structured-output` with your keys before the first real run.
-- The memory has only been tested with fake embeddings and fake models. The 0.9 similarity at which
-  a preference replaces an older one is not tuned for the real embedding model: run
-  `just check-memory` first. Only the brand agent reads memory, and it is not yet read when the site
+- The memory has only been tested with fake embeddings and fake models. The 0.8 similarity at which
+  a preference replaces an older one was tuned with `just check-memory` on six sentence pairs
+  only, so it may need another look with more real preferences. Only the brand agent reads memory, and it is not yet read when the site
   is edited.
 - Only the research and brand agents have workers. The wireframe and the site arrive in the next
   milestones, so an approved run ends with those tasks still pending.

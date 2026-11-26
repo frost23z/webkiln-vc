@@ -37,8 +37,9 @@ from webkiln_agents.memory.records import (
 logger = logging.getLogger(__name__)
 
 # Cosine similarity above which a new record of the same kind is taken to be an updated version of
-# the old one. It is high on purpose: a miss only keeps both records. Tune it with `check-memory`.
-SUPERSEDE_ABOVE = 0.9
+# the old one. It is high on purpose: a miss only keeps both records. Tuned with `check-memory` on
+# gemini-embedding-2: the same preference scored 0.886 or more and different ones 0.634 or less.
+SUPERSEDE_ABOVE = 0.8
 RECENCY_WEIGHT = 0.1  # at most +10% for a record written just now
 RECENCY_HALF_LIFE_DAYS = 30.0
 

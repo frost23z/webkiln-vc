@@ -143,8 +143,14 @@ async def test_the_same_slot_in_two_projects_is_two_records(store: InMemoryStore
 
 async def test_recall_limits_each_scope_and_filters_by_kind(store: InMemoryStore) -> None:
     mem = memory(store)
-    for n in range(5):
-        await mem.remember(f"Prefers option number {n} for the site", "preference", "user_said")
+    for text in (
+        "Never use stock photos on the site",
+        "Keep every heading under six words",
+        "Use a warm and friendly tone of voice",
+        "Always show the booking button in the header",
+        "Brand colours are deep green and gold",
+    ):
+        await mem.remember(text, "preference", "user_said")
     await mem.remember("Wants a calm tone on the site", "feedback", "user_said")
 
     found = await mem.recall("site option", limit=2)

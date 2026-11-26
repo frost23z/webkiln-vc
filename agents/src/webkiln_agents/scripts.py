@@ -172,7 +172,10 @@ async def _check_memory() -> None:
             f"A threshold between them separates the two. About {middle:.2f} would sit in the gap."
         )
     else:
-        print("No threshold separates these pairs. Keep 0.9 (a miss only keeps both records).")
+        print(
+            "No threshold separates these pairs. Keep the current one "
+            "(a miss only keeps both records)."
+        )
 
 
 def check_memory() -> None:
