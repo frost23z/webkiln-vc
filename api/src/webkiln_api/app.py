@@ -53,7 +53,7 @@ def create_app(context: Context | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=[get_api_settings().UI_ORIGIN],
         allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "Idempotency-Key"],
     )
     register_error_handlers(app)
     app.include_router(router)
