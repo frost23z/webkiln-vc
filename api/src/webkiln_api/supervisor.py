@@ -6,6 +6,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
+from webkiln_agents.budget import BudgetedLLM, CallBudget
 from webkiln_agents.core.schemas import Input
 from webkiln_agents.manager.context import Context, run_config
 from webkiln_agents.manager.editing import EDIT_NODES, edit_command
@@ -55,6 +56,7 @@ class RunSupervisor:
         self.context = context
         self.memory = memory
         self.channels = dict[str, RunChannel]()
+        self.budgets = dict[str, CallBudget]()  # the calls of each run started in this process
         self._tasks = set[asyncio.Task[None]]()
 
     def start(self, thread_id: str, brief: Input | None, editing: bool = False) -> None:
@@ -88,20 +90,34 @@ class RunSupervisor:
         return (await self._context_for(thread_id)).memory
 
     async def _context_for(self, thread_id: str) -> Context:
-        """The shared context with this run's memory: the user and the project it belongs to.
+        """The shared context for this run: its model-call budget and its memory.
 
-        A run with no user id, or an API with no memory store, runs without memory. A failure
-        here is logged and has the same result, because a run never depends on memory.
+        The budget starts from the count saved with the run, so a restart goes on from it. A run
+        with no user id, or an API with no memory store, runs without memory. A failure setting
+        either up is logged, because a run never depends on memory and the cap only protects
+        quota: a run that cannot read its row runs without a cap.
         """
-        if self.memory is None:
-            return self.context
+        context = self.context
+        without_memory = replace(context, memory=None) if self.memory is not None else context
         try:
             run = await store.find_run(self.sessions, thread_id)
-            if run is not None and run.user_id:
-                return replace(self.context, memory=self.memory(run.user_id, run.project_id))
+        except Exception:
+            logger.exception("Could not read the run %s to set up its context", thread_id)
+            return without_memory
+        if run is None:
+            return without_memory
+        if context.llm is not None:
+            budget = self.budgets[thread_id] = CallBudget(run.model_calls, run.call_limit)
+            context = without_memory = replace(context, llm=BudgetedLLM(context.llm, budget))
+            if self.memory is not None:
+                context = without_memory = replace(without_memory, memory=None)
+        if self.memory is None or not run.user_id:
+            return without_memory
+        try:
+            return replace(context, memory=self.memory(run.user_id, run.project_id))
         except Exception:
             logger.exception("Could not set up the memory of run %s", thread_id)
-        return replace(self.context, memory=None)
+            return without_memory
 
     async def _run(
         self,
@@ -140,6 +156,7 @@ class RunSupervisor:
             # A message that broke the graph loses nothing: the site is as the last checkpoint
             # saved it. The run stays finished, so the user can ask again, and does not become a
             # failed run that no retry could fix.
+            await self._save_calls(thread_id)
             await self._save_status(thread_id, "completed" if editing else "failed")
             channel.publish(sse("error", {"code": "run_failed", "message": "The run failed."}))
         else:
@@ -151,6 +168,7 @@ class RunSupervisor:
     async def sync(self, thread_id: str, status: RunStatus) -> None:
         """Copy the graph state into the run's rows. A failure is logged and does not stop the
         run, because the checkpoint holds everything and the next sync repeats the work."""
+        await self._save_calls(thread_id)
         try:
             snapshot = await self.graph.aget_state(run_config(self.context, thread_id))
             values = snapshot.values
@@ -167,6 +185,15 @@ class RunSupervisor:
             )
         except Exception:
             logger.exception("Could not save the rows of run %s", thread_id)
+
+    async def _save_calls(self, thread_id: str) -> None:
+        budget = self.budgets.get(thread_id)
+        if budget is None:
+            return
+        try:
+            await store.save_calls(self.sessions, thread_id, budget.used)
+        except Exception:
+            logger.exception("Could not save the model calls of run %s", thread_id)
 
     async def _save_status(self, thread_id: str, status: RunStatus) -> None:
         try:

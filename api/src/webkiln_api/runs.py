@@ -4,6 +4,7 @@ from uuid import uuid7
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic_core import to_jsonable_python
+from webkiln_agents.budget import CALL_ALLOWANCE
 from webkiln_agents.core.schemas import Input
 from webkiln_agents.manager.plan import Task
 from webkiln_agents.manager.review import ReviewDecision
@@ -86,6 +87,8 @@ async def get_run(thread_id: str, request: Request) -> RunDetail:
         brief=run.brief,
         state=to_jsonable_python(values) if values else None,
         review=to_jsonable_python(review) if review else None,
+        model_calls=run.model_calls,
+        call_limit=run.call_limit,
     )
 
 
@@ -103,14 +106,9 @@ async def stream_run(thread_id: str, request: Request) -> StreamingResponse:
     return StreamingResponse(events, media_type="text/event-stream", headers=headers)
 
 
-@router.post("/{thread_id}/retry", status_code=202)
-async def retry_run(thread_id: str, request: Request) -> RunResponse:
-    """Run the failed tasks again, and the ones that were waiting for the user's decision.
-    Finished tasks are not repeated."""
-    run = await get_stored_run(request, thread_id)
+async def restart_stuck_tasks(request: Request, thread_id: str) -> RunResponse:
+    """Put the failed tasks and the ones that wait for the user back to `pending`, and run on."""
     supervisor = supervisor_of(request)
-    if run.status != "failed" or supervisor.is_running(thread_id):
-        raise HTTPException(status_code=409, detail="Only a failed run can be retried")
     graph = request.app.state.graph
     snapshot = await graph.aget_state(thread_config(thread_id))
     tasks = cast(dict[str, Task], snapshot.values.get("tasks", {}))
@@ -127,6 +125,35 @@ async def retry_run(thread_id: str, request: Request) -> RunResponse:
     await store.set_status(request.app.state.sessions, thread_id, "running")
     supervisor.start(thread_id, None)
     return RunResponse(thread_id=thread_id, status="running")
+
+
+@router.post("/{thread_id}/retry", status_code=202)
+async def retry_run(thread_id: str, request: Request) -> RunResponse:
+    """Run the failed tasks again, and the ones that were waiting for the user's decision.
+    Finished tasks are not repeated. A run that used all its model calls needs `continue`."""
+    run = await get_stored_run(request, thread_id)
+    if run.status != "failed" or supervisor_of(request).is_running(thread_id):
+        raise HTTPException(status_code=409, detail="Only a failed run can be retried")
+    return await restart_stuck_tasks(request, thread_id)
+
+
+@router.post("/{thread_id}/continue", status_code=202)
+async def continue_run(thread_id: str, request: Request) -> RunResponse:
+    """Allow a run that used all its model calls to use more, and carry on.
+
+    A failed run runs its stuck tasks again, like `retry`. A finished run (a chat edit hit the
+    cap) only gets the calls, so the next message works. Each call to this route adds
+    the same allowance.
+    """
+    run = await get_stored_run(request, thread_id)
+    if run.model_calls < run.call_limit:
+        raise HTTPException(status_code=409, detail="The run still has model calls left")
+    if supervisor_of(request).is_running(thread_id):
+        raise HTTPException(status_code=409, detail="The run is still running")
+    await store.allow_calls(request.app.state.sessions, thread_id, CALL_ALLOWANCE)
+    if run.status == "failed":
+        return await restart_stuck_tasks(request, thread_id)
+    return RunResponse(thread_id=thread_id, status=run.status)
 
 
 @router.post("/{thread_id}/resume", status_code=202)

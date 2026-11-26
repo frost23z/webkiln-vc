@@ -8,6 +8,7 @@ from typing import Any, cast
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from webkiln_agents.budget import DEFAULT_CALL_LIMIT
 from webkiln_agents.core.schemas import Input
 from webkiln_agents.manager.plan import Task
 
@@ -35,6 +36,8 @@ class StoredRun:
     updated_at: datetime
     project_id: str = ""
     user_id: str | None = None
+    model_calls: int = 0
+    call_limit: int = DEFAULT_CALL_LIMIT
 
 
 def stored_run(run: Run, project: Project) -> StoredRun:
@@ -46,6 +49,8 @@ def stored_run(run: Run, project: Project) -> StoredRun:
         run.updated_at,
         str(project.id),
         project.user_id,
+        run.model_calls,
+        run.call_limit,
     )
 
 
@@ -96,6 +101,28 @@ async def unfinished_runs(sessions: Sessions) -> list[StoredRun]:
             .where(Run.status == "running")
         )
         return [stored_run(*row) for row in rows]
+
+
+async def save_calls(sessions: Sessions, thread_id: str, used: int) -> None:
+    """Keep the run's count of model calls. It never goes down, so a late write from a stale
+    process cannot give calls back."""
+    async with sessions.begin() as session:
+        await session.execute(
+            update(Run)
+            .where(Run.thread_id == thread_id)
+            .values(model_calls=func.greatest(Run.model_calls, used))
+        )
+
+
+async def allow_calls(sessions: Sessions, thread_id: str, extra: int) -> int | None:
+    """Raise the run's call limit by `extra`, and return the new limit (`None`: no such run)."""
+    async with sessions.begin() as session:
+        return await session.scalar(
+            update(Run)
+            .where(Run.thread_id == thread_id)
+            .values(call_limit=Run.call_limit + extra)
+            .returning(Run.call_limit)
+        )
 
 
 async def set_status(sessions: Sessions, thread_id: str, status: RunStatus) -> None:

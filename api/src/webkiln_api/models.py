@@ -16,6 +16,8 @@ class RunDetail(RunResponse):
     brief: Input
     state: dict[str, Any] | None  # None until the run has its first checkpoint
     review: dict[str, Any] | None  # what the user is asked to decide, while the run is `waiting`
+    model_calls: int  # model calls the run has used
+    call_limit: int  # the most it may use. At the limit it stops until the user allows more
 
 
 class RunSummary(RunResponse):

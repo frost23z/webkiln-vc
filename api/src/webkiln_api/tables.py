@@ -34,6 +34,9 @@ class Run(Base):
     status: Mapped[str]
     # The key of the request that last resumed the run, so a repeat of it is told apart from a race.
     resume_key: Mapped[str | None]
+    # Model calls the run has used and the most it may use. The user can allow more.
+    model_calls: Mapped[int] = mapped_column(default=0, server_default="0")
+    call_limit: Mapped[int] = mapped_column(default=60, server_default="60")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
