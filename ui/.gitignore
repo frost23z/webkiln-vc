@@ -42,4 +42,4 @@ yarn-error.log*
 next-env.d.ts
 
 # TODO: Ignored to reduce noise. Will remove later.
-lib/generated
+# lib/generated
