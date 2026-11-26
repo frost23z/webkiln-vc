@@ -67,12 +67,17 @@ def _texts(section: SectionCopy) -> list[str]:
 
 
 def copy_problems(
-    section_ids_and_types: Sequence[tuple[str, str]], copy: PageCopy, keyword: str | None = None
+    section_ids_and_types: Sequence[tuple[str, str]],
+    copy: PageCopy,
+    keyword: str | None = None,
+    elsewhere: str = "",
 ) -> list[str]:
     """What is wrong with a page's copy, given the page's `(section id, type)` pairs.
 
-    `keyword` is the page's target keyword: its words must appear in the copy, because the site
-    check looks for them and a page that fails it after all the model calls were spent is a waste.
+    `keyword` is the page's target keyword. The site check looks for its words on the whole page,
+    so `elsewhere` is the text the page shows besides the copy (its title and meta description),
+    and the copy only has to supply the words that text lacks. Asking for more made models repeat
+    the keyword, and the brand name inside it, in several headings.
     """
     expected = [section_id for section_id, _ in section_ids_and_types]
     got = [section.id for section in copy.sections]
@@ -104,7 +109,9 @@ def copy_problems(
     if keyword:
         wanted = set(WORDS.findall(keyword.casefold()))
         written = set(
-            WORDS.findall(" ".join(t for s in copy.sections for t in _texts(s)).casefold())
+            WORDS.findall(
+                " ".join([elsewhere, *(t for s in copy.sections for t in _texts(s))]).casefold()
+            )
         )
         if wanted and not wanted <= written:
             problems.append(f"the target keyword {keyword!r} is not used in the copy of the page")

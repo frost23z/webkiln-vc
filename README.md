@@ -12,8 +12,9 @@ research agents run in parallel, and the UI shows their progress and reports. Wh
 the Manager decides whether to retry it, skip it or ask you. The brand agent then writes a brand
 guideline and the run pauses for your decision: approve it, edit colours, fonts, tagline or
 positioning by hand, or ask for changes in words (up to four rounds). The paused run survives an
-API restart. The wireframe and generation agents come in later milestones, so a run ends after the
-approval for now.
+API restart. After the approval the wireframe agent plans the pages and sections, and the generate
+step writes the copy of every page (one model call per page) and the notes for the pictures. Code
+renders the pages from templates and checks the site before it is saved as version 1.
 
 The system also has a long-term memory, kept in Postgres with pgvector. When you approve the brand,
 or ask for changes, it keeps the approved guideline, the research summaries, your hand edits, your
@@ -85,7 +86,12 @@ pnpm --dir ui exec tsc --noEmit && pnpm --dir ui lint
   a preference replaces an older one was tuned with `just check-memory` on six sentence pairs
   only, so it may need another look with more real preferences. Only the brand agent reads memory, and it is not yet read when the site
   is edited.
-- Only the research and brand agents have workers. The wireframe and the site arrive in the next
-  milestones, so an approved run ends with those tasks still pending.
+- The site is plain HTML and CSS. Pictures are placeholders that keep a prompt and alt text for a
+  real image later. The forms the wireframe asks for are drawn but post nowhere, because the
+  site has no backend. Prices and testimonials in the copy are examples for the owner to replace,
+  and the copy writer is told to leave out contact details and policies that the brief does not
+  give.
+- A generate task that fails (a page that cannot be written, or a site that fails its checks) and
+  is started again writes every page again, so it spends one model call per page.
 - The approval card and the resume endpoint have only been tested with fake models, not in a
   browser or against the live providers.

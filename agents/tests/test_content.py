@@ -107,3 +107,34 @@ def test_the_target_keyword_must_be_in_the_copy() -> None:
     bad = broken(lambda d: d["sections"][0].update(subheading="A calm place to sleep."))
     assert any("target keyword" in p for p in problems(bad))
     assert problems(bad, keyword=None) == []  # the check is only on when a keyword is given
+
+
+def test_the_title_and_description_can_supply_the_keyword() -> None:
+    bare = broken(lambda d: d["sections"][0].update(subheading="A calm place to sleep."))
+    shown = f"Rooms at Cedar Stay {KEYWORD} with real photos"
+    assert copy_problems(PAIRS, PageCopy.model_validate(bare), KEYWORD, shown) == []
+
+
+async def test_a_page_whose_seo_text_has_the_keyword_needs_no_retry() -> None:
+    bare = broken(lambda d: d["sections"][0].update(subheading="A calm place to sleep."))
+    llm = FakeLLM({"content": [bare]})
+    assert await written(llm) == PageCopy.model_validate(bare)
+    assert len(llm.prompts) == 1  # the meta description of the page has the keyword
+
+
+def test_the_rules_forbid_invented_contact_details_names_and_features() -> None:
+    text = " ".join(text_of(page_messages(ROOMS, WIREFRAME, SAMPLE_BRAND, SAMPLE_BRIEF)).split())
+    assert "phone numbers" in text
+    assert "never a person's name" in text
+    assert "online booking system" in text
+    assert "never repeat it across headings" in text
+
+
+def test_the_page_lists_what_it_can_really_do() -> None:
+    contact = next(p for p in WIREFRAME.pages if p.slug == "contact")
+    text = text_of(page_messages(contact, WIREFRAME, SAMPLE_BRAND, SAMPLE_BRIEF))
+    assert '"interactive": [' in text
+    assert "An enquiry form on the contact page." in text
+    assert '"interactive": []' in text_of(
+        page_messages(ROOMS, WIREFRAME, SAMPLE_BRAND, SAMPLE_BRIEF)
+    )
