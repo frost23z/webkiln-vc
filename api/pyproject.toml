@@ -33,4 +33,4 @@ sources.webkiln-agents = { workspace = true }
 entrypoint = "webkiln_api.main:app"
 
 [tool.vercel]
-entrypoint = "webkiln_api.main:app"
+entrypoint = "main:app"
