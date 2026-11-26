@@ -25,6 +25,7 @@ from webkiln_agents.manager.context import Context
 from webkiln_agents.manager.feedback import BRAND, ask_order, plan_rework
 from webkiln_agents.manager.review import MAX_REVISIONS, ReviewDecision
 from webkiln_agents.manager.state import State
+from webkiln_agents.memory.prompt import memory_block
 from webkiln_agents.workers.brand import BrandGuideline, apply_edits
 
 
@@ -110,9 +111,16 @@ def brand_review(state: State) -> Command[Literal["dispatch", "manager_feedback"
 async def manager_feedback(state: State, runtime: Runtime[Context]) -> Command[Literal["dispatch"]]:
     """One Manager call decides which tasks run again. Code applies only what the rules allow."""
     feedback = state.pending_feedback or ""
-    llm = runtime.context.llm if runtime.context else None
+    context = runtime.context
+    llm = context.llm if context else None
+    recalled = await context.memory.recall(feedback) if context and context.memory else []
     order = await ask_order(
-        llm, state.initial_input, feedback, state.outputs.get(BRAND), state.tasks
+        llm,
+        state.initial_input,
+        feedback,
+        state.outputs.get(BRAND),
+        state.tasks,
+        memory_block(recalled),
     )
     rework = plan_rework(state.tasks, order, feedback)
     get_stream_writer()(

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from webkiln_agents.manager.context import Context
+from webkiln_agents.memory.prompt import memory_block
 from webkiln_agents.models import ConfigError
 from webkiln_agents.workers.base import Worker, WorkerInput, WorkerResult
 from webkiln_agents.workers.outputs import (
@@ -35,6 +36,8 @@ class ResearchSpec:
     schema: type[Report]
     # Rules of this agent that the schema cannot express: the output in, the problems out.
     extra_check: Callable[[Report], list[str]] | None = None
+    # Whether the agent reads long-term memory (the user's preferences and project history).
+    uses_memory: bool = False
 
 
 SPECS: dict[str, ResearchSpec] = {
@@ -102,13 +105,30 @@ def research_messages(
     ]
 
 
+def recall_query(packet: WorkerInput) -> str:
+    """What to look up in memory: the brief and what the manager asked for this time."""
+    brief = packet["brief"]
+    instruction = packet["task"].get("instruction") or ""
+    return f"{brief['niche']}. {brief['brand_name']}. {brief['prompt']}. {instruction}"[:800]
+
+
+async def recalled_block(spec: ResearchSpec, packet: WorkerInput, context: Context) -> str:
+    """The memory block for this agent's prompt, or nothing when it has no memory to read."""
+    if not spec.uses_memory or context.memory is None:
+        return ""
+    return memory_block(await context.memory.recall(recall_query(packet)))
+
+
 def research_worker(spec: ResearchSpec) -> Worker:
     async def worker(packet: WorkerInput, context: Context) -> WorkerResult:
         if context.llm is None:
             msg = f"No model provider is configured for the {spec.agent} agent"
             raise ConfigError(msg)
         call = context.llm.structured(spec.agent, spec.schema)
-        report = await generate(call, research_messages(spec, packet), extra_check=spec.extra_check)
+        extra = await recalled_block(spec, packet, context)
+        report = await generate(
+            call, research_messages(spec, packet, extra), extra_check=spec.extra_check
+        )
         return WorkerResult(summary=report.summary, data=report.model_dump(mode="json"))
 
     return worker

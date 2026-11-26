@@ -172,9 +172,11 @@ BRAND_SPEC = ResearchSpec(
     "and tone of voice, the messaging, a palette of four colours (primary, secondary, accent and "
     "background) as #RRGGBB values where the primary colour reads clearly on the background, one "
     "heading font and one body font from Google Fonts, the logo direction, image guidelines, the "
-    "UI and UX direction and two or three inspiration references.",
+    "UI and UX direction and two or three inspiration references. When a <memory> block is given, "
+    "follow the user's lasting preferences in it.",
     BrandGuideline,
     extra_check=palette_problems,
+    uses_memory=True,
 )
 
 brand_worker = research_worker(BRAND_SPEC)
