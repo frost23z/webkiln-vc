@@ -2,29 +2,38 @@
 
 import {
     ApiError,
+    getChat,
     getRun,
     listRuns,
+    listVersions,
+    restoreVersion,
     resumeRun,
     retryRun,
+    sendMessage,
     startRun,
     streamRun,
     type Brief,
+    type ChatEntry,
     type ReviewDecision,
     type RunDetail,
     type RunStatus,
     type RunSummary,
+    type VersionInfo,
 } from '@/lib/api'
 import { parseAnalysis, parsePlan, parseTaskStates, planFromEvent, type Plan } from '@/lib/plan'
 import { describeEvent, finishedNodes } from '@/lib/progress'
 import { parseReview } from '@/lib/review'
+import { parseSite } from '@/lib/site'
 import { bannerFor, doneStatus } from '@/lib/status'
 import { clearThreadId, readThreadId, saveThreadId } from '@/lib/thread'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnalysisCard } from './analysis-card'
 import { ApprovalCard } from './approval-card'
 import { BriefForm } from './brief-form'
+import { ChatPanel } from './chat-panel'
 import { ProgressLines } from './progress-lines'
 import { RunHistory } from './run-history'
+import { SitePanel } from './site-panel'
 import { StatusBanner } from './status-banner'
 import { TaskList } from './task-list'
 
@@ -55,6 +64,14 @@ export function Workspace() {
     const [history, setHistory] = useState<RunSummary[]>([])
     // True while an answer to the brand review is on its way to the API.
     const [answering, setAnswering] = useState(false)
+    // The chat about the finished site and its saved versions, as the API has them.
+    const [chat, setChat] = useState<ChatEntry[]>([])
+    const [versions, setVersions] = useState<VersionInfo[]>([])
+    // What the user just sent, shown in the chat until the saved chat has it.
+    const [pending, setPending] = useState<string | null>(null)
+    // An older version the user is looking at. `null` follows the newest one.
+    const [pinned, setPinned] = useState<number | null>(null)
+    const [page, setPage] = useState('index.html')
 
     /**
      * Follows a run until it ends. The run goes on in the API whether or not this page is open,
@@ -172,6 +189,40 @@ export function Workspace() {
         }
     }, [formShown])
 
+    const threadId = run?.thread_id
+    const site = parseSite(run?.state)
+    const latest = site?.version ?? null
+
+    /** Load the chat and the versions of the site again. A failure leaves what is shown. */
+    const reloadSite = useCallback(async (id: string) => {
+        try {
+            const [saved, listed] = await Promise.all([getChat(id), listVersions(id)])
+            setChat(saved)
+            setVersions(listed)
+        } catch {
+            // The next change loads them again.
+        }
+    }, [])
+
+    // Once the site is finished, and again after every change to it (the run is `completed`
+    // between messages), load its chat and versions.
+    useEffect(() => {
+        if (!threadId || latest === null || status !== 'completed') return
+        let cancelled = false
+        Promise.all([getChat(threadId), listVersions(threadId)])
+            .then(([saved, listed]) => {
+                if (cancelled) return
+                setChat(saved)
+                setVersions(listed)
+            })
+            .catch(() => {
+                // The next change loads them again.
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [threadId, latest, status])
+
     async function openRun(threadId: string) {
         setError(null)
         try {
@@ -182,6 +233,9 @@ export function Workspace() {
             setLines([])
             setLivePlan(null)
             setNode(null)
+            setChat([])
+            setVersions([])
+            setPinned(null)
             if (saved.status === 'running') void follow(threadId)
         } catch (err) {
             setError(errorText(err))
@@ -238,10 +292,49 @@ export function Workspace() {
         }
     }
 
+    /**
+     * Send a chat message about the site. The API refuses it when the site is being changed or
+     * has a newer version than the one on screen, and says why. Otherwise the run handles it in
+     * the background, and the page follows it like any run: the preview moves to the new version.
+     */
+    async function sendEdit(text: string) {
+        if (!run || latest === null) return
+        setError(null)
+        setPending(text)
+        try {
+            await sendMessage(run.thread_id, text, pinned ?? latest)
+            setPinned(null)
+            await follow(run.thread_id)
+            await reloadSite(run.thread_id)
+        } catch (err) {
+            setError(errorText(err))
+        } finally {
+            setPending(null)
+        }
+    }
+
+    /** Make an older version the newest one again. History stays, so this can be undone. */
+    async function restore(version: number) {
+        if (!run) return
+        setError(null)
+        try {
+            await restoreVersion(run.thread_id, version)
+            setPinned(null)
+            setRun(await getRun(run.thread_id))
+            await reloadSite(run.thread_id)
+        } catch (err) {
+            setError(errorText(err))
+        }
+    }
+
     function newRun() {
         streamAbort.current?.abort()
         clearThreadId()
         setRun(null)
+        setChat([])
+        setVersions([])
+        setPinned(null)
+        setPending(null)
         setError(null)
         setLines([])
         setLivePlan(null)
@@ -261,8 +354,10 @@ export function Workspace() {
         )
     }
 
+    const viewing = pinned ?? latest
+
     return (
-        <div className='flex flex-col gap-8'>
+        <div className={`flex w-full flex-col gap-8 ${site ? '' : 'max-w-2xl'}`}>
             {run ? (
                 <button
                     type='button'
@@ -286,6 +381,28 @@ export function Workspace() {
                 </p>
             )}
             {status && <StatusBanner banner={bannerFor(status, node)} />}
+            {run && site && viewing !== null && (
+                <div className='grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]'>
+                    <ChatPanel
+                        messages={chat}
+                        pending={pending}
+                        busy={status === 'running'}
+                        onSend={sendEdit}
+                    />
+                    <SitePanel
+                        threadId={run.thread_id}
+                        version={viewing}
+                        latest={latest ?? viewing}
+                        pages={site.pages}
+                        page={page}
+                        versions={versions}
+                        busy={status === 'running'}
+                        onPage={setPage}
+                        onVersion={setPinned}
+                        onRestore={restore}
+                    />
+                </div>
+            )}
             <ProgressLines lines={lines} />
             {status === 'failed' && run && (
                 <button

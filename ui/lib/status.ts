@@ -13,6 +13,9 @@ const PHASES: Record<string, string> = {
     review_failures: 'Researching',
     brand_review: 'Waiting for approval',
     edit_router: 'Applying modifications',
+    edit_content: 'Applying modifications',
+    edit_design: 'Applying modifications',
+    edit_structure: 'Applying modifications',
 }
 
 /** `node` is the last node that finished, so its phase shows until the next update arrives. */

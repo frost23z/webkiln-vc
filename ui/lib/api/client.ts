@@ -82,6 +82,50 @@ export function resumeRun(threadId: string, decision: ReviewDecision, key: strin
     )
 }
 
+/**
+ * Sends a chat message about the finished site. `baseVersion` is the version the user is looking
+ * at, and the API refuses the message when the site has a newer one. The answer comes through
+ * the stream, so the caller follows the run after this resolves.
+ */
+export function sendMessage(threadId: string, message: string, baseVersion?: number) {
+    return call(() =>
+        client.POST('/runs/{thread_id}/messages', {
+            params: { path: { thread_id: threadId } },
+            body: { message, base_version: baseVersion ?? null },
+        })
+    )
+}
+
+export function getChat(threadId: string) {
+    return call(() =>
+        client.GET('/runs/{thread_id}/messages', {
+            params: { path: { thread_id: threadId } },
+        })
+    )
+}
+
+export function listVersions(threadId: string) {
+    return call(() =>
+        client.GET('/runs/{thread_id}/versions', {
+            params: { path: { thread_id: threadId } },
+        })
+    )
+}
+
+/** Makes a new version that is a copy of an older one. Nothing is deleted. */
+export function restoreVersion(threadId: string, version: number) {
+    return call(() =>
+        client.POST('/runs/{thread_id}/versions/{version}/restore', {
+            params: { path: { thread_id: threadId, version } },
+        })
+    )
+}
+
+/** Where the API serves one file of one saved version, for the preview frame. */
+export function previewUrl(threadId: string, version: number, path = 'index.html'): string {
+    return `${baseUrl}/preview/${encodeURIComponent(threadId)}/${version}/${path}`
+}
+
 export function getTaskReport(threadId: string, taskId: string) {
     return call(() =>
         client.GET('/runs/{thread_id}/tasks/{task_id}', {
