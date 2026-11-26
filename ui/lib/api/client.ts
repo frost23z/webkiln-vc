@@ -1,6 +1,7 @@
 import createClient from 'openapi-fetch'
 import type { paths } from '../generated/schema'
 
+import { getUserId } from '../user'
 import { ApiError } from './errors'
 import { readEvents, type SseEvent } from './sse'
 import type { Brief, ErrorResponse, ReviewDecision } from './types'
@@ -38,7 +39,14 @@ async function call<T>(request: () => Promise<{ data?: T; error?: unknown }>): P
 export { call }
 
 export function startRun(brief: Brief) {
-    return call(() => client.POST('/runs', { body: brief }))
+    // The id scopes the run's long-term memory to this browser. It is read here, at the time of
+    // the call, because localStorage does not exist while the page is rendered on the server.
+    return call(() =>
+        client.POST('/runs', {
+            params: { header: { 'X-User-Id': getUserId() } },
+            body: brief,
+        })
+    )
 }
 
 export function listRuns() {
