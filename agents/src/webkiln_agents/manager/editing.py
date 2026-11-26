@@ -30,6 +30,7 @@ from langgraph.errors import NodeError
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
+from webkiln_agents.budget import CAP_REPLY, CallCapReached, cap_reached
 from webkiln_agents.manager.context import Context
 from webkiln_agents.manager.remember import Candidate, announce, clip, save, site_candidates
 from webkiln_agents.manager.state import State
@@ -173,6 +174,8 @@ async def edit_router(state: State, runtime: Runtime[Context]) -> Command[Next]:
         edit_digest(state),
     )
     if intent is None:
+        if cap_reached(context.llm if context else None):
+            return Command(update=reply(CAP_REPLY), goto="__end__")
         text = "I could not work out what you want. Please say it again, a little differently."
         return Command(update=reply(text), goto="__end__")
     if context and context.memory and intent.preferences:
@@ -420,5 +423,8 @@ def edit_failed(state: State, error: NodeError) -> Command[Done]:
     an apology and the run stays finished: the site is as it was before the message."""
     message = f"{type(error.error).__name__}: {error.error}"[:200]
     logger.warning("an edit failed after its retries: %s", message)
-    text = "I could not make that change just now, and nothing was saved. Please try again."
+    if isinstance(error.error, CallCapReached):
+        text = CAP_REPLY
+    else:
+        text = "I could not make that change just now, and nothing was saved. Please try again."
     return Command(update=reply(text), goto="__end__")
