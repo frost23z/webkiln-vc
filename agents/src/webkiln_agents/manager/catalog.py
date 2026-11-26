@@ -14,6 +14,11 @@ class AgentSpec:
     needs_approval: bool = False
     # Agents whose full output (not just the summary) this agent needs to read, and check against.
     reads: tuple[AgentName, ...] = ()
+    # Tries for transient errors (a rate limit, a timeout, a network error), the first one
+    # included, and how long one try may run. A worker also fixes a rejected answer by itself,
+    # at most twice (`MAX_FIXES`), and the Manager may send a failed task back twice.
+    max_tries: int = 3
+    attempt_timeout: float = 300.0
 
 
 CATALOG: dict[AgentName, AgentSpec] = {
@@ -45,6 +50,9 @@ CATALOG: dict[AgentName, AgentSpec] = {
             after=("wireframe",),
             needs_approval=True,
             reads=("brand", "wireframe"),
+            # A new try writes every page again, so it gets fewer tries and more time.
+            max_tries=2,
+            attempt_timeout=900.0,
         ),
     ]
 }

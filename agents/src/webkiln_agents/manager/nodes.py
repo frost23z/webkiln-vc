@@ -1,9 +1,10 @@
+from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
 from langgraph.config import get_stream_writer
 from langgraph.errors import NodeError
 from langgraph.runtime import Runtime
-from langgraph.types import Command, Send
+from langgraph.types import Command, RetryPolicy, Send
 
 from webkiln_agents.core.schemas import Input
 from webkiln_agents.manager.analysis import analyze_brief
@@ -16,6 +17,7 @@ from webkiln_agents.manager.plan import Task
 from webkiln_agents.manager.scheduler import ready_tasks
 from webkiln_agents.manager.state import State
 from webkiln_agents.workers.base import WorkerInput
+from webkiln_agents.workers.retry import WORKER_RETRY, with_retries
 
 SKIPPED_NOTE = "(skipped: no result)"
 
@@ -116,19 +118,40 @@ def progress(event: str, task: Task, **extra: str) -> None:
     get_stream_writer()({"event": event, "task_id": task.id, "agent": task.agent, **extra})
 
 
-async def run_worker(state: WorkerInput, runtime: Runtime[Context]) -> dict:
-    """Run one task's worker. Retries and failures are handled around this node (see graph.py)."""
-    context = runtime.context or Context()
-    task = Task(**state["task"])
-    progress("worker_started", task)
-    result = await context.workers[task.agent](state, context)
-    done = task.model_copy(update={"status": "done", "error": None})
-    progress("worker_done", task)
-    return {
-        "tasks": {task.id: done},
-        "summaries": {task.id: result.summary},
-        "outputs": {task.id: result.data},
-    }
+def make_run_worker(
+    policy: RetryPolicy = WORKER_RETRY,
+) -> Callable[[WorkerInput, Runtime[Context]], Awaitable[dict]]:
+    """The `run_worker` node, retrying transient errors with each agent's own limits."""
+
+    async def run_worker(state: WorkerInput, runtime: Runtime[Context]) -> dict:
+        """Run one task's worker. A failure after the retries goes to `mark_failed`."""
+        context = runtime.context or Context()
+        task = Task(**state["task"])
+        spec = CATALOG[task.agent]
+        progress("worker_started", task)
+
+        def retrying(tries: int, error: Exception) -> None:
+            progress("worker_retry", task, tries=str(tries), error=f"{error}"[:200])
+
+        result = await with_retries(
+            lambda: context.workers[task.agent](state, context),
+            policy=policy,
+            max_tries=spec.max_tries,
+            seconds_per_try=spec.attempt_timeout,
+            on_retry=retrying,
+        )
+        done = task.model_copy(update={"status": "done", "error": None})
+        progress("worker_done", task)
+        return {
+            "tasks": {task.id: done},
+            "summaries": {task.id: result.summary},
+            "outputs": {task.id: result.data},
+        }
+
+    return run_worker
+
+
+run_worker = make_run_worker()
 
 
 def mark_failed(state: WorkerInput, error: NodeError) -> Command[Literal["review_failures"]]:
