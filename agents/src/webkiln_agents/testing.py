@@ -56,6 +56,141 @@ SAMPLE_BRAND: dict[str, Any] = {
 }
 
 
+def _section(kind: str, title: str, brief: str, needs: list[str], **ctas: dict[str, str]) -> dict:
+    return {
+        "type": kind,
+        "title": title,
+        "content_brief": brief,
+        "audience_needs": needs,
+        **ctas,
+    }
+
+
+_BOOK = {"label": "Book direct", "target": "contact"}
+
+SAMPLE_WIREFRAME_DRAFT: dict[str, Any] = {
+    "summary": "Four pages: home, rooms, offers and contact, each answering a need of the guests.",
+    "navigation": ["index", "rooms", "offers", "contact"],
+    "functional_requirements": [
+        {"kind": "form", "page": "contact", "description": "An enquiry form on the contact page."},
+        {"kind": "map", "page": "contact", "description": "A map of the hotel's street."},
+    ],
+    "pages": [
+        {
+            "slug": "index",
+            "name": "Home",
+            "purpose": "Introduce Cedar Stay and send visitors to book.",
+            "seo": {
+                "target_keyword": "boutique hotel",
+                "title": "Cedar Stay: a boutique hotel",
+                "meta_description": "Cedar Stay is a small, owner-led boutique hotel. Book direct "
+                "for the best rate and a late checkout.",
+            },
+            "sections": [
+                _section(
+                    "hero",
+                    "Stay like you live here",
+                    "A warm, calm welcome that says Cedar Stay is a boutique hotel with real local "
+                    "character.",
+                    ["Easy booking"],
+                    cta_primary=_BOOK,
+                ),
+                _section(
+                    "features",
+                    "Why guests book direct",
+                    "Three refined reasons to book direct: the best rate, a late checkout and "
+                    "local tips.",
+                    ["Flexible cancellation"],
+                ),
+                _section(
+                    "testimonials",
+                    "Guests say",
+                    "Short, warm quotes from guests about the calm rooms and the hosts.",
+                    ["Clear photos"],
+                ),
+                _section(
+                    "cta_band",
+                    "Ready to stay?",
+                    "A calm closing invitation to book a room directly with the hotel.",
+                    ["Easy booking"],
+                    cta_primary=_BOOK,
+                ),
+            ],
+        },
+        {
+            "slug": "rooms",
+            "name": "Rooms",
+            "purpose": "Show every room type with honest photos.",
+            "seo": {
+                "target_keyword": "boutique hotel rooms",
+                "title": "Rooms at Cedar Stay",
+                "meta_description": "See the boutique hotel rooms at Cedar Stay: real photos, "
+                "clear details and a flexible cancellation policy.",
+            },
+            "sections": [
+                _section(
+                    "hero",
+                    "Our rooms",
+                    "An introduction to the rooms, with a refined, warm voice.",
+                    ["Clear photos"],
+                ),
+                _section(
+                    "gallery",
+                    "Real rooms, real light",
+                    "Three honest photos of the rooms in natural light.",
+                    ["Clear photos"],
+                ),
+                _section(
+                    "faq",
+                    "Questions about the rooms",
+                    "Answers about room sizes, beds and cancelling a stay.",
+                    ["Flexible cancellation"],
+                ),
+            ],
+        },
+        {
+            "slug": "offers",
+            "name": "Offers",
+            "purpose": "Present packages and rates for direct bookings.",
+            "seo": {
+                "target_keyword": "hotel packages",
+                "title": "Hotel packages and offers",
+                "meta_description": "Hotel packages from Cedar Stay: weekend escapes and long "
+                "stays, with the best rate when you book direct.",
+            },
+            "sections": [
+                _section(
+                    "pricing",
+                    "Packages",
+                    "Two or three calm, clear packages with their prices.",
+                    ["Easy booking", "Flexible cancellation"],
+                    cta_primary=_BOOK,
+                ),
+            ],
+        },
+        {
+            "slug": "contact",
+            "name": "Contact",
+            "purpose": "Let guests ask a question or book.",
+            "seo": {
+                "target_keyword": "contact boutique hotel",
+                "title": "Contact Cedar Stay",
+                "meta_description": "Contact Cedar Stay to book a room or ask a question. We "
+                "answer every message within a day.",
+            },
+            "sections": [
+                _section(
+                    "contact",
+                    "Get in touch",
+                    "A warm note, the address and opening hours, and an enquiry form.",
+                    ["Easy booking"],
+                ),
+            ],
+        },
+    ],
+}
+
+
 class FakeStructured[T: BaseModel]:
     def __init__(self, llm: FakeLLM, role: str, schema: type[T]) -> None:
         self._llm = llm

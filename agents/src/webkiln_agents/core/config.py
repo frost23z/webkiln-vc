@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     MODEL_COMPETITOR: str | None = None
     MODEL_SEO: str | None = None
     MODEL_BRAND: str | None = None
+    MODEL_WIREFRAME: str | None = None
+    MODEL_CONTENT: str | None = None
+    MODEL_IMAGES: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"), env_file_encoding="utf-8", extra="ignore"

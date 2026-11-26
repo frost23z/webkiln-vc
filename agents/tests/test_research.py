@@ -16,7 +16,14 @@ from webkiln_agents.workers.structured import check_output
 
 def packet(agent: str = "niche", instruction: str = "") -> WorkerInput:
     task = {"id": agent, "agent": agent, "instruction": instruction, "depends_on": []}
-    return {"task": task, "brief": SAMPLE_BRIEF, "analysis": None, "context": {}, "previous": None}
+    return {
+        "task": task,
+        "brief": SAMPLE_BRIEF,
+        "analysis": None,
+        "context": {},
+        "previous": None,
+        "upstream": {},
+    }
 
 
 def text_of(messages: list[BaseMessage]) -> str:

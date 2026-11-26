@@ -12,6 +12,8 @@ class AgentSpec:
     skippable: bool = False
     # The agent starts only after the user has approved the brand guideline.
     needs_approval: bool = False
+    # Agents whose full output (not just the summary) this agent needs to read, and check against.
+    reads: tuple[AgentName, ...] = ()
 
 
 CATALOG: dict[AgentName, AgentSpec] = {
@@ -35,12 +37,14 @@ CATALOG: dict[AgentName, AgentSpec] = {
             "Plans the pages and sections of the site.",
             after=("brand",),
             needs_approval=True,
+            reads=("brand", "audience", "seo"),
         ),
         AgentSpec(
             "generate",
             "Writes the website files from the wireframe and brand.",
             after=("wireframe",),
             needs_approval=True,
+            reads=("brand", "wireframe"),
         ),
     ]
 }

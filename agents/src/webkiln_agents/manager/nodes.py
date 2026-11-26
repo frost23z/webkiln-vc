@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from langgraph.config import get_stream_writer
 from langgraph.errors import NodeError
@@ -42,6 +42,16 @@ async def analyze(state: State, runtime: Runtime[Context]) -> dict:
     return {"analysis": analysis}
 
 
+def upstream_outputs(task: Task, state: State) -> dict[str, dict[str, Any]]:
+    """The full outputs of the agents this task's agent reads, for the ones that finished."""
+    done = {t.agent: t.id for t in state.tasks.values() if t.status == "done"}
+    return {
+        agent: state.outputs[done[agent]]
+        for agent in CATALOG[task.agent].reads
+        if agent in done and done[agent] in state.outputs
+    }
+
+
 def worker_packet(task: Task, state: State) -> WorkerInput:
     """What one worker gets: its task, the brief and the summaries of its dependencies only."""
     context = {
@@ -57,6 +67,7 @@ def worker_packet(task: Task, state: State) -> WorkerInput:
         "context": context,
         # A task sent back for rework sees its last answer, so it changes only what was asked.
         "previous": state.outputs.get(task.id) if task.status == "needs_rework" else None,
+        "upstream": upstream_outputs(task, state),
     }
 
 

@@ -59,6 +59,7 @@ async def test_a_real_worker_names_the_missing_key_instead_of_failing_obscurely(
         "analysis": None,
         "context": {},
         "previous": None,
+        "upstream": {},
     }
     with pytest.raises(ConfigError, match="none of those providers has an API key"):
         await context.workers["niche"](packet, context)

@@ -35,7 +35,14 @@ def hit(n: int, content: str = "Rooms and rates.") -> SearchResult:
 
 def packet(instruction: str = "") -> WorkerInput:
     task = {"id": "competitor", "agent": "competitor", "instruction": instruction, "depends_on": []}
-    return {"task": task, "brief": SAMPLE_BRIEF, "analysis": None, "context": {}, "previous": None}
+    return {
+        "task": task,
+        "brief": SAMPLE_BRIEF,
+        "analysis": None,
+        "context": {},
+        "previous": None,
+        "upstream": {},
+    }
 
 
 def text_of(messages: list[BaseMessage]) -> str:

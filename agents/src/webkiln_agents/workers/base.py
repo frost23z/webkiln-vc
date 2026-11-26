@@ -15,6 +15,9 @@ class WorkerInput(TypedDict):
     analysis: dict[str, Any] | None  # the Manager's `BriefAnalysis`, when there is one
     context: dict[str, str]  # summaries of the tasks this one depends on, by task id
     previous: dict[str, Any] | None  # the task's last full output, when it is sent back to rework
+    # The full outputs of the agents the catalog says this one `reads`, by agent name. A skipped
+    # or unfinished agent is missing. Everything else a worker learns of earlier work is a summary.
+    upstream: dict[str, dict[str, Any]]
 
 
 class WorkerResult(BaseModel):
