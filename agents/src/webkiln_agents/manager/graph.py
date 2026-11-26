@@ -17,6 +17,7 @@ from webkiln_agents.manager.nodes import (
     run_worker,
     seed_tasks,
 )
+from webkiln_agents.manager.remember import remember_approved
 from webkiln_agents.manager.state import State
 from webkiln_agents.workers.errors import is_transient
 
@@ -43,6 +44,7 @@ def build_graph(
     builder.add_node("review_failures", review_failures)
     builder.add_node("brand_review", brand_review)
     builder.add_node("manager_feedback", manager_feedback)
+    builder.add_node("remember_approved", remember_approved)
     # LangGraph's type hints have no handler that takes `error: NodeError`, but it injects it.
     builder.add_node(  # pyrefly: ignore[no-matching-overload]
         "run_worker",
@@ -59,6 +61,8 @@ def build_graph(
     # A finished wave goes through `review_failures` (a worker that failed arrives there from
     # `mark_failed`). `dispatch` and `review_failures` choose their next step themselves.
     builder.add_edge("run_worker", "review_failures")
+    # Approval is the one way into the second half of the run, and it keeps what was approved.
+    builder.add_edge("remember_approved", "dispatch")
 
     return builder.compile(checkpointer=checkpointer)
 

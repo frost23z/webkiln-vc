@@ -23,6 +23,7 @@ from pydantic import ValidationError
 
 from webkiln_agents.manager.context import Context
 from webkiln_agents.manager.feedback import BRAND, ask_order, plan_rework
+from webkiln_agents.manager.remember import announce, feedback_candidates, save
 from webkiln_agents.manager.review import MAX_REVISIONS, ReviewDecision
 from webkiln_agents.manager.state import State
 from webkiln_agents.memory.prompt import memory_block
@@ -70,7 +71,9 @@ def _reason(error: ValueError) -> str:
     return str(error)[:300]
 
 
-def brand_review(state: State) -> Command[Literal["dispatch", "manager_feedback", "brand_review"]]:
+def brand_review(
+    state: State,
+) -> Command[Literal["remember_approved", "manager_feedback", "brand_review"]]:
     """Pause for the user's decision on the brand guideline.
 
     A node that calls `interrupt` runs again from the top on resume, and a second `interrupt` in
@@ -97,7 +100,7 @@ def brand_review(state: State) -> Command[Literal["dispatch", "manager_feedback"
     get_stream_writer()({"event": "review_decision", "decision": entry["decision"]})
     if decision.action == "approve":
         update["brand_approved"] = True
-        return Command(update=update, goto="dispatch")
+        return Command(update=update, goto="remember_approved")
     if edited is not None:
         update["outputs"] = {BRAND: edited.model_dump()}
         update["summaries"] = {BRAND: edited.summary}
@@ -123,6 +126,9 @@ async def manager_feedback(state: State, runtime: Runtime[Context]) -> Command[L
         memory_block(recalled),
     )
     rework = plan_rework(state.tasks, order, feedback)
+    if context and context.memory:
+        preferences = order.preferences if order else []
+        announce("feedback", await save(context.memory, feedback_candidates(feedback, preferences)))
     get_stream_writer()(
         {
             "event": "rework_planned",

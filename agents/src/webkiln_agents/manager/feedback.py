@@ -12,10 +12,10 @@ import json
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Annotated, Any
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 from webkiln_agents.core.schemas import Input
 from webkiln_agents.llm import LLMProvider
@@ -43,6 +43,15 @@ class ReworkOrder(BaseModel):
         max_length=6,
         description="The tasks to run again. List only the ones the feedback really changes.",
     )
+    preferences: list[Annotated[str, StringConstraints(min_length=5, max_length=200)]] = Field(
+        default_factory=list,
+        max_length=3,
+        description=(
+            "Lasting preferences the user states that apply to every site they build, not only "
+            "this one, each as one short sentence, like 'Never use stock photos'. Empty when "
+            "the feedback is only about this site."
+        ),
+    )
 
 
 RULES = """\
@@ -52,6 +61,8 @@ differently. The brand task always runs again, because the feedback is about the
 - Name a research task (niche, audience, competitor, seo) only when the feedback changes what that
   research should cover, such as another niche, another audience or a new requirement.
 - Feedback about tone, colours, fonts or wording needs the brand task alone.
+- Fill `preferences` only with what the user said outright about every site they build, such as
+  "never use stock photos". Never invent one, and leave it empty for feedback about this site.
 - Use only the task ids in <tasks>. Write each instruction so that the worker can follow it
   without seeing the feedback.
 When a <memory> block is given, it holds what the user told us before: use it to keep the
