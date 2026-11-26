@@ -8,7 +8,7 @@ from langgraph.store.memory import InMemoryStore
 from langgraph.types import Command
 from test_research import text_of
 from webkiln_agents.manager.context import Context, run_config
-from webkiln_agents.manager.editing import edit_command
+from webkiln_agents.manager.editing import DIGEST_CHARS, DIGEST_EDITS, edit_command, edit_digest
 from webkiln_agents.manager.graph import build_graph
 from webkiln_agents.manager.state import State
 from webkiln_agents.memory.embeddings import EMBEDDING_DIMS
@@ -500,3 +500,54 @@ async def test_a_lasting_preference_and_the_decision_are_remembered_and_recalled
     assert "<memory>\n" in second
     assert "keep headings under five words" in second
     assert any(e["event"] == "memory_saved" for e in session.events)
+
+
+def block_of(prompt_text: str, name: str) -> str:
+    """The text between `<name>` and `</name>` in one prompt."""
+    start = prompt_text.index(f"<{name}>")
+    return prompt_text[start : prompt_text.index(f"</{name}>", start)]
+
+
+async def test_the_router_reads_every_earlier_edit_even_after_the_chat_window_has_moved_on() -> (
+    None
+):
+    wanted = [f"Change the hero heading, wording number {n}" for n in range(1, 5)]
+    session = await built(
+        {
+            "manager:EditIntent": [
+                *[intent("content_edit", text, section=HERO) for text in wanted],
+                intent("question", "Why?", reply="Because."),
+            ],
+            "content:SectionCopy": [new_words(HERO, "hero", f"Heading {n}") for n in range(1, 5)],
+        }
+    )
+    for n in range(1, len(wanted) + 1):
+        await session.ask(f"Edit {n}", base_version=n)
+    await session.ask("What did I change first?")
+
+    last = str(session.llm.prompts_for("manager", EditIntent)[4][1].content)  # the user part
+    chat, edits = block_of(last, "chat"), block_of(last, "edits")
+    assert "Edit 1" not in chat  # four edits are eight messages: the first has left the window
+    for n, text in enumerate(wanted, start=1):
+        assert f"version {n + 1} (content_edit): {text}" in edits  # but the digest has all four
+    assert edits.index("number 1") < edits.index("number 4")  # oldest first
+
+
+async def test_the_first_message_reads_an_empty_digest_and_a_long_one_keeps_the_newest() -> None:
+    session = await built(
+        {"manager:EditIntent": [intent("question", "Hi", reply="Hello.")]},
+    )
+    await session.ask("Hello?")
+    first = str(session.llm.prompts_for("manager", EditIntent)[0][1].content)
+    assert "(no edits yet)" in block_of(first, "edits")
+
+    state = await session.state()
+    long_changes = [
+        {"version": n + 2, "cause": "content_edit", "request": "x" * 400, "summary": "s"}
+        for n in range(DIGEST_EDITS + 5)
+    ]
+    state = state.model_copy(update={"site_changes": long_changes})
+    lines = edit_digest(state)
+    assert len(lines) == DIGEST_EDITS
+    assert lines[0].startswith("version 7 ")  # the five oldest are dropped
+    assert all(len(line) < DIGEST_CHARS + 40 for line in lines)  # and each line is clipped

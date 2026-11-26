@@ -63,6 +63,8 @@ EDIT_NODES = frozenset(
     {"edit_router", "edit_content", "edit_design", "edit_structure", "remember_edit"}
 )
 HISTORY_TURNS = 6  # earlier messages the Manager reads, so "the same as before" can be resolved
+DIGEST_EDITS = 30  # earlier edits the Manager reads, one line each
+DIGEST_CHARS = 160  # longest line of that digest
 RECALLED = 3  # remembered lines given to the Manager
 Next = Literal["edit_content", "edit_design", "edit_structure", "__end__"]
 # Where an edit node goes next. One type for all of them, because `Command` is invariant: a
@@ -94,6 +96,16 @@ def _history(state: State) -> list[tuple[str, str]]:
     """The turns before the latest message, oldest first, as `(role, text)`."""
     earlier = state.messages[:-1][-HISTORY_TURNS:]
     return [("user" if isinstance(m, HumanMessage) else "assistant", _text(m)) for m in earlier]
+
+
+def edit_digest(state: State) -> list[str]:
+    """One line for each edit saved so far, from `site_changes`, so the Manager still knows an
+    instruction that is older than the chat window. The oldest lines go first when it is long."""
+    lines = [
+        f"version {c['version']} ({c['cause']}): {clip(c['request'] or c['summary'], DIGEST_CHARS)}"
+        for c in state.site_changes
+    ]
+    return lines[-DIGEST_EDITS:]
 
 
 def reply(text: str) -> dict[str, Any]:
@@ -158,6 +170,7 @@ async def edit_router(state: State, runtime: Runtime[Context]) -> Command[Next]:
         listing(head.wireframe_model(), head.page_copies()),
         _design_facts(state, head),
         memory_block(recalled),
+        edit_digest(state),
     )
     if intent is None:
         text = "I could not work out what you want. Please say it again, a little differently."
