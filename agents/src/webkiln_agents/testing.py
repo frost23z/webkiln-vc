@@ -1,7 +1,9 @@
 """Helpers shared by the tests of both packages. Nothing here calls a real model."""
 
+import asyncio
 import re
 import zlib
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -242,6 +244,75 @@ def sample_site_copy(wireframe: Wireframe | None = None) -> dict[str, dict[str, 
         )
         for page in frame.pages
     }
+
+
+def sample_image_plan(wireframe: Wireframe | None = None) -> dict[str, Any]:
+    """A valid answer of the image worker: one note for every picture slot of the wireframe."""
+    from webkiln_agents.site.images import slots_for
+
+    frame = wireframe or sample_wireframe()
+    slots = slots_for([(p.slug, [(s.id, s.type) for s in p.sections]) for p in frame.pages])
+    return {
+        "images": [
+            {"slot": s.id, "prompt": f"Soft light for {s.id}.", "alt": f"A calm view for {s.id}"}
+            for s in slots
+        ]
+    }
+
+
+class FakeSiteLLM:
+    """A model for the content and image roles. A page is answered by its slug in the prompt, so
+    the order in which the parallel page calls arrive does not matter."""
+
+    def __init__(
+        self,
+        *,
+        copies: dict[str, Any] | None = None,
+        images: Any = None,
+        slow: set[str] | None = None,
+    ) -> None:
+        self.copies = copies or sample_site_copy()
+        self.images = images if images is not None else sample_image_plan()
+        self.slow = slow or set()
+        self.calls: Counter[str] = Counter()
+        self.prompts: list[str] = []  # the text of every prompt, in the order the calls came
+        self.answered: set[str] = set()
+        self.others_done = asyncio.Event()  # every call but the slow ones has been answered
+
+    def structured(self, role: str, schema: type) -> FakeSiteLLM:
+        self._role, self._schema = role, schema
+        return _Call(self, role, schema)  # type: ignore[return-value]
+
+
+class _Call:
+    def __init__(self, llm: FakeSiteLLM, role: str, schema: type) -> None:
+        self.llm, self.role, self.schema = llm, role, schema
+
+    def _answered(self, name: str) -> None:
+        self.llm.answered.add(name)
+        if self.llm.answered >= {"index", "rooms", "contact", "images"}:
+            self.llm.others_done.set()
+
+    async def ainvoke(self, messages: list[Any]) -> Any:
+        text = "\n".join(str(m.content) for m in messages)
+        self.llm.prompts.append(text)
+        if self.role == "images":
+            self.llm.calls["images"] += 1
+            if isinstance(self.llm.images, Exception):
+                raise self.llm.images
+            answer = self.schema.model_validate(self.llm.images)
+            self._answered("images")
+            return answer
+        slug = re.search(r'"slug": "([a-z0-9-]+)"', text)
+        if slug is None:
+            msg = "FakeSiteLLM expects every content prompt to name the page's slug"
+            raise AssertionError(msg)
+        self.llm.calls[slug[1]] += 1
+        if slug[1] in self.llm.slow:
+            await asyncio.Event().wait()
+        answer = self.schema.model_validate(self.llm.copies[slug[1]])
+        self._answered(slug[1])
+        return answer
 
 
 class FakeStructured[T: BaseModel]:
