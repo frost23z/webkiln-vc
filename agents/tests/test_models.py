@@ -69,7 +69,7 @@ def test_unknown_role_is_refused() -> None:
 
 def test_real_clients_build_without_network() -> None:
     config = settings(google=1, groq=1, openrouter=1)
-    for text in ("google:gemini-2.5-flash", "groq:openai/gpt-oss-120b", "openrouter:a/b:free"):
+    for text in ("google:gemini-3.5-flash-lite", "groq:openai/gpt-oss-120b", "openrouter:a/b:free"):
         (spec,) = parse_chain(text)
         assert build_model(spec, config) is not None
 

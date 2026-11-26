@@ -29,7 +29,7 @@ PROVIDERS: tuple[Provider, ...] = ("google", "groq", "openrouter")
 # Gemini carries the workers, because its free tokens-per-minute are the largest. Groq's
 # `gpt-oss-120b` allows about 8,000 tokens a minute, so it is only ever a last resort for a
 # worker. Free-tier model IDs change often: set `MODEL_<ROLE>` in `.env` when one stops working.
-GEMINI_CHAIN = "google:gemini-2.5-flash,google:gemini-2.5-flash-lite,groq:openai/gpt-oss-120b"
+GEMINI_CHAIN = "google:gemini-3.5-flash-lite,groq:openai/gpt-oss-120b"
 DEFAULT_CHAINS: dict[str, str] = {
     # 0 to 2 calls: the brief analysis, and one decision per wave that had a failure.
     "manager": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free,groq:openai/gpt-oss-120b",

@@ -13,6 +13,7 @@ from webkiln_agents.memory.embeddings import EMBEDDING_DIMS, EMBEDDING_MODEL, go
 from webkiln_agents.memory.service import SUPERSEDE_ABOVE
 from webkiln_agents.models import (
     DEFAULT_CHAINS,
+    METHODS,
     PROVIDERS,
     ConfigError,
     ModelSpec,
@@ -33,7 +34,7 @@ async def _try(spec: ModelSpec, method: str) -> str:
     try:
         result = await model.ainvoke([HumanMessage("Answer with the word 'ok' and the number 7.")])
     except Exception as error:
-        return f"FAILED  {type(error).__name__}: {str(error)[:120]}"
+        return f"FAILED  {type(error).__name__}: {str(error)[:300]}"
     return "works" if isinstance(result, Ping) else f"FAILED  answered {result!r}"
 
 
@@ -49,7 +50,8 @@ async def _check() -> None:
             print(f"{provider}: no API key in .env, skipped")
     for spec in chosen.values():
         for method in ("function_calling", "json_schema"):
-            print(f"{spec} [{method}]: {await _try(spec, method)}")
+            used = "  <- used by the app" if METHODS[spec.provider] == method else ""
+            print(f"{spec} [{method}]: {await _try(spec, method)}{used}")
 
 
 def check_structured_output() -> None:
