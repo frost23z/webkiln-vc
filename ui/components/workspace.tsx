@@ -8,6 +8,7 @@ import {
     listVersions,
     restoreVersion,
     resumeRun,
+    continueRun,
     retryRun,
     sendMessage,
     startRun,
@@ -274,6 +275,18 @@ export function Workspace() {
         }
     }
 
+    /** Allow more model calls to a run that used them all, and carry on. */
+    async function allowMoreCalls() {
+        if (!run) return
+        setError(null)
+        try {
+            await continueRun(run.thread_id)
+            await follow(run.thread_id)
+        } catch (err) {
+            setError(errorText(err))
+        }
+    }
+
     /**
      * Answer the brand review. The run carries on in the API from where it paused, so the page
      * follows it again. The key is new for every click, and a repeat of one is harmless.
@@ -413,7 +426,22 @@ export function Workspace() {
                 </div>
             )}
             <ProgressLines lines={lines} />
-            {status === 'failed' && run && (
+            {run && run.model_calls >= run.call_limit && status !== 'running' && (
+                <div className='flex flex-col items-start gap-2 rounded-md border border-amber-300 p-3 text-sm dark:border-amber-700'>
+                    <p>
+                        This run used all {run.call_limit} of its model calls, so it stopped to ask
+                        you first.
+                    </p>
+                    <button
+                        type='button'
+                        onClick={allowMoreCalls}
+                        className='rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900'
+                    >
+                        Allow 60 more calls and continue
+                    </button>
+                </div>
+            )}
+            {status === 'failed' && run && run.model_calls < run.call_limit && (
                 <button
                     type='button'
                     onClick={retry}

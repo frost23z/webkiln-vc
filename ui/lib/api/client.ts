@@ -69,6 +69,15 @@ export function retryRun(threadId: string) {
     )
 }
 
+/** Lets a run that used all its model calls use more, and runs on if it had stopped. */
+export function continueRun(threadId: string) {
+    return call(() =>
+        client.POST('/runs/{thread_id}/continue', {
+            params: { path: { thread_id: threadId } },
+        })
+    )
+}
+
 /**
  * Answers the brand review. The key makes a repeat of the same click harmless: the API runs the
  * answer once and replies to a repeat with the run as it stands.

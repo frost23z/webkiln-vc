@@ -36,6 +36,7 @@ const WORKER_EVENTS: Record<string, string> = {
     worker_started: 'started',
     worker_done: 'finished',
     worker_failed: 'failed',
+    worker_retry: 'hit a temporary error and is trying again',
 }
 
 const DECISIONS: Record<string, string> = {
