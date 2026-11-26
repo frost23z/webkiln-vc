@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid7
 
-from sqlalchemy import DateTime, ForeignKey, ForeignKeyConstraint, func
+from sqlalchemy import DateTime, ForeignKey, ForeignKeyConstraint, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -91,3 +91,39 @@ class BrandVersion(Base):
     feedback: Mapped[str | None]
     edits: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SiteVersion(Base):
+    """One version of the website. Version 1 is what `generate` built and holds every file. A
+    later version holds only the files it changed and points to its parent for the rest.
+
+    The wireframe, the page copy and the picture notes are saved with the version, so an edit can
+    render the site again without parsing HTML."""
+
+    __tablename__ = "site_versions"
+
+    run_id: Mapped[UUID] = mapped_column(ForeignKey("runs.id"), primary_key=True)
+    version: Mapped[int] = mapped_column(primary_key=True)
+    parent_version: Mapped[int | None]
+    cause: Mapped[str]  # what made this version, such as "generate"
+    summary: Mapped[str]
+    wireframe: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    copies: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    images: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SiteFile(Base):
+    """One file of a site version, as text."""
+
+    __tablename__ = "site_files"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["run_id", "version"], ["site_versions.run_id", "site_versions.version"]
+        ),
+    )
+
+    run_id: Mapped[UUID] = mapped_column(primary_key=True)
+    version: Mapped[int] = mapped_column(primary_key=True)
+    path: Mapped[str] = mapped_column(primary_key=True)
+    content: Mapped[str] = mapped_column(Text)

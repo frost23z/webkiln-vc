@@ -13,6 +13,7 @@ from webkiln_agents.manager.state import State
 from webkiln_api import store
 from webkiln_api.memory import MemoryFactory
 from webkiln_api.models import RunStatus
+from webkiln_api.site import strip_update
 from webkiln_api.status import status_of
 from webkiln_api.store import Sessions
 from webkiln_api.streaming import RunChannel, sse
@@ -93,7 +94,8 @@ class RunSupervisor:
                 version="v2",
                 durability="sync",
             ):
-                channel.publish(sse(chunk["type"], chunk["data"]))
+                data = strip_update(chunk["data"]) if chunk["type"] == "updates" else chunk["data"]
+                channel.publish(sse(chunk["type"], data))
                 if chunk["type"] == "updates":
                     await self.sync(thread_id, "running")
             snapshot = await self.graph.aget_state(config)

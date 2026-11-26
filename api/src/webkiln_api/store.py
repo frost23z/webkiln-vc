@@ -5,14 +5,23 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from webkiln_agents.core.schemas import Input
 from webkiln_agents.manager.plan import Task
 
 from webkiln_api.models import RunStatus, TaskReport
-from webkiln_api.tables import BrandVersion, Project, Run, TaskOutput, TaskRow
+from webkiln_api.site import GENERATE_AGENT, INITIAL_CAUSE, without_files
+from webkiln_api.tables import (
+    BrandVersion,
+    Project,
+    Run,
+    SiteFile,
+    SiteVersion,
+    TaskOutput,
+    TaskRow,
+)
 
 type Sessions = async_sessionmaker[AsyncSession]
 
@@ -148,7 +157,7 @@ async def sync_run(
                         "run_id": run_id,
                         "task_id": task_id,
                         "summary": summaries.get(task_id, ""),
-                        "data": data,
+                        "data": without_files(data),
                     }
                     for task_id, data in saved.items()
                 ]
@@ -162,6 +171,11 @@ async def sync_run(
                     },
                 )
             )
+        for task_id, data in saved.items():
+            if tasks[task_id].agent == GENERATE_AGENT and tasks[task_id].status == "done":
+                await _save_first_site(
+                    session, run_id, data, outputs.get("wireframe"), summaries.get(task_id, "")
+                )
         if reviews:
             # A decision is never changed, so a repeat of the sync leaves the saved rows alone.
             await session.execute(
@@ -181,6 +195,65 @@ async def sync_run(
                 )
                 .on_conflict_do_nothing(index_elements=["run_id", "version"])
             )
+
+
+async def _save_first_site(
+    session: AsyncSession,
+    run_id: Any,
+    build: Mapping[str, Any],
+    wireframe: Mapping[str, Any] | None,
+    summary: str,
+) -> None:
+    """Save what `generate` built as site version 1, with all its files.
+
+    The same build is saved again as the same version, so a repeat of the sync changes nothing.
+    A build that was reworked replaces version 1, because no edit has been made to it yet.
+    """
+    if not build.get("files") or wireframe is None:
+        return
+    row = {
+        "run_id": run_id,
+        "version": 1,
+        "parent_version": None,
+        "cause": INITIAL_CAUSE,
+        "summary": summary,
+        "wireframe": wireframe,
+        "copies": build["copies"],
+        "images": build["images"],
+    }
+    insert_version = insert(SiteVersion).values(row)
+    await session.execute(
+        insert_version.on_conflict_do_update(
+            index_elements=["run_id", "version"],
+            set_={
+                "summary": insert_version.excluded.summary,
+                "wireframe": insert_version.excluded.wireframe,
+                "copies": insert_version.excluded.copies,
+                "images": insert_version.excluded.images,
+            },
+        )
+    )
+    await session.execute(delete(SiteFile).where(SiteFile.run_id == run_id, SiteFile.version == 1))
+    await session.execute(
+        insert(SiteFile).values(
+            [
+                {"run_id": run_id, "version": 1, "path": path, "content": content}
+                for path, content in build["files"].items()
+            ]
+        )
+    )
+
+
+async def site_files(sessions: Sessions, thread_id: str, version: int = 1) -> dict[str, str]:
+    """The files of a saved site version, by path."""
+    async with sessions() as session:
+        rows = await session.execute(
+            select(SiteFile.path, SiteFile.content)
+            .join(Run, Run.id == SiteFile.run_id)
+            .where(Run.thread_id == thread_id, SiteFile.version == version)
+            .order_by(SiteFile.path)
+        )
+        return {row.path: row.content for row in rows}
 
 
 async def claim_resume(sessions: Sessions, thread_id: str, key: str | None) -> bool:
