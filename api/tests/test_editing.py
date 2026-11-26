@@ -334,7 +334,7 @@ def test_the_preview_serves_pages_with_a_policy_that_blocks_scripts_and_the_netw
     assert "default-src 'none'" in policy
     assert "script-src" not in policy  # nothing allows a script: it falls to default-src
     assert "form-action 'none'" in policy
-    assert "frame-ancestors http://localhost:3000" in policy
+    assert "frame-ancestors 'self' http://localhost:3000" in policy
     assert home.headers["x-content-type-options"] == "nosniff"
     assert home.headers["cache-control"] == "no-cache"
 

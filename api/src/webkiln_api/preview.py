@@ -35,7 +35,8 @@ def content_type_of(path: str) -> str:
 
 def policy() -> str:
     """No script, no network, no form, no outside frames. Fonts come from Google Fonts, which the
-    pages' head links, and only the UI may put a page in a frame."""
+    pages' head links, and only the UI (or the same origin, when both sit behind one domain) may
+    put a page in a frame."""
     return "; ".join(
         [
             "default-src 'none'",
@@ -44,7 +45,7 @@ def policy() -> str:
             "img-src 'self' data:",
             "base-uri 'none'",
             "form-action 'none'",
-            f"frame-ancestors {get_api_settings().UI_ORIGIN}",
+            f"frame-ancestors 'self' {get_api_settings().UI_ORIGIN}",
         ]
     )
 
