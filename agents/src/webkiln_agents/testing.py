@@ -176,8 +176,8 @@ SAMPLE_WIREFRAME_DRAFT: dict[str, Any] = {
             "seo": {
                 "target_keyword": "contact boutique hotel",
                 "title": "Contact Cedar Stay",
-                "meta_description": "Contact Cedar Stay to book a room or ask a question. We "
-                "answer every message within a day.",
+                "meta_description": "Contact the boutique hotel Cedar Stay to book a room or ask a "
+                "question. We answer every message within a day.",
             },
             "sections": [
                 _section(
