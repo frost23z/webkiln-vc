@@ -192,3 +192,15 @@ async def test_a_wireframe_that_never_passes_fails_the_task() -> None:
     bad["navigation"].append("blog")
     with pytest.raises(WorkerOutputError, match="blog"):
         await WORKERS["wireframe"](wireframe_packet(), Context(llm=FakeLLM({"wireframe": [bad]})))
+
+
+async def test_a_draft_that_only_misses_tone_words_is_sent_back_then_accepted() -> None:
+    plain = draft()
+    for p in plain["pages"]:
+        for section in p["sections"]:
+            section["content_brief"] = "A plain description of what this section is about."
+    llm = FakeLLM({"wireframe": [plain]})
+    result = await WORKERS["wireframe"](wireframe_packet(), Context(llm=llm))
+    assert Wireframe.model_validate(result.data).pages  # used, not failed
+    assert len(llm.prompts_for("wireframe")) == 3  # the first try and two fixes
+    assert "tone words" in text_of(llm.prompts_for("wireframe")[1])

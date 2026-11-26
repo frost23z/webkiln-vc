@@ -1,6 +1,7 @@
 """Get one valid, checked output from a model. The retry loop of every worker is here."""
 
 import json
+import logging
 import re
 from collections.abc import Callable
 from typing import Any
@@ -11,6 +12,8 @@ from pydantic import BaseModel, ValidationError
 
 from webkiln_agents.llm import StructuredCall
 from webkiln_agents.workers.errors import WorkerOutputError
+
+logger = logging.getLogger(__name__)
 
 # A rejected answer may be sent back this many times, with the problems written out.
 MAX_FIXES = 2
@@ -59,15 +62,18 @@ async def generate[T: BaseModel](
     messages: list[BaseMessage],
     *,
     extra_check: Callable[[T], list[str]] | None = None,
+    soft_check: Callable[[T], list[str]] | None = None,
 ) -> T:
     """Ask until the answer is valid and passes the checks, or raise `WorkerOutputError`.
 
     A parse error, a model that did not comply (`None`) and a failed check each cost one try.
     Other errors (a rate limit, an outage) are not caught: the graph's retry policy handles them.
     `extra_check` is a function from the output to a list of problems, for rules of one worker.
+    `soft_check` is the same for style rules: its problems are sent back like the others, but if
+    they are all that is left on the last try, the answer is accepted rather than failing the run.
     """
     problems: list[str] = []
-    for _ in range(MAX_FIXES + 1):
+    for attempt in range(MAX_FIXES + 1):
         prompt = messages
         if problems:
             fixes = "\n".join(f"- {p}" for p in problems)
@@ -85,8 +91,13 @@ async def generate[T: BaseModel](
         if result is None:
             problems = ["you did not return the structured answer"]
             continue
-        problems = check_output(result) + (extra_check(result) if extra_check else [])
+        hard = check_output(result) + (extra_check(result) if extra_check else [])
+        soft = soft_check(result) if soft_check else []
+        problems = hard + soft
         if not problems:
+            return result
+        if not hard and attempt == MAX_FIXES:
+            logger.warning("Accepting an answer with style problems: %s", "; ".join(soft))
             return result
     msg = "No valid output after retries: " + "; ".join(problems)
     raise WorkerOutputError(msg[:600])

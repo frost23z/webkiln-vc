@@ -249,16 +249,25 @@ def _tone_problems(draft: WireframeDraft, brand: dict[str, Any]) -> list[str]:
     ]
 
 
-def plan_problems(draft: WireframeDraft, upstream: dict[str, dict[str, Any]]) -> list[str]:
+def tone_check(draft: WireframeDraft, upstream: dict[str, dict[str, Any]]) -> list[str]:
+    """The tone-word rule alone. It is a style rule, so a draft that only breaks this one is
+    still used after the last try (see `generate`), instead of failing the whole run."""
+    brand = upstream.get("brand")
+    return _tone_problems(draft, brand) if brand else []
+
+
+def plan_problems(
+    draft: WireframeDraft, upstream: dict[str, dict[str, Any]], *, tone: bool = True
+) -> list[str]:
     """Every problem of a draft, for the model to fix. A skipped agent has no output, and its
-    check is left out."""
+    check is left out. `tone=False` leaves out the tone-word rule, which is checked softly."""
     problems = structure_problems(draft)
     if seo := upstream.get("seo"):
         problems += _landing_page_problems(draft, seo)
     if audience := upstream.get("audience"):
         problems += _need_problems(draft, audience)
-    if brand := upstream.get("brand"):
-        problems += _tone_problems(draft, brand)
+    if tone:
+        problems += tone_check(draft, upstream)
     return problems
 
 
@@ -327,6 +336,11 @@ async def wireframe_worker(packet: WorkerInput, context: Context) -> WorkerResul
     upstream = packet["upstream"]
     call = context.llm.structured("wireframe", WireframeDraft)
     messages = research_messages(WIREFRAME_SPEC, packet, upstream_block(upstream))
-    draft = await generate(call, messages, extra_check=lambda d: plan_problems(d, upstream))
+    draft = await generate(
+        call,
+        messages,
+        extra_check=lambda d: plan_problems(d, upstream, tone=False),
+        soft_check=lambda d: tone_check(d, upstream),
+    )
     wireframe = finalize(draft)
     return WorkerResult(summary=wireframe.summary, data=wireframe.model_dump(mode="json"))
