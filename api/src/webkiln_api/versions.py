@@ -4,6 +4,8 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Path, Request
 from langchain_core.messages import AIMessage, HumanMessage
+from webkiln_agents.core.schemas import Input
+from webkiln_agents.manager.remember import save, site_candidates
 from webkiln_agents.site.head import SiteChange, SiteHead, current_head
 
 from webkiln_api import store
@@ -161,5 +163,10 @@ async def _restore(request: Request, thread_id: str, version: int, inputs: dict[
     }
     # Written as `remember_edit`, so the run is at its end, as after any edit.
     await graph.aupdate_state(config, update, as_node="remember_edit")
+    # Memory describes the site as it is now, so it follows a restore like it follows an edit.
+    memory = await request.app.state.supervisor.memory_for(thread_id)
+    if memory is not None:
+        brand_name = Input.model_validate(values["initial_input"]).brand_name
+        await save(memory, site_candidates(brand_name, RESTORE_CAUSE, brand, inputs["wireframe"]))
     await request.app.state.supervisor.sync(thread_id, "completed")
     return change.version

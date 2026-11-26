@@ -25,7 +25,7 @@ from webkiln_agents.manager.nodes import (
     run_worker,
     seed_tasks,
 )
-from webkiln_agents.manager.remember import remember_approved
+from webkiln_agents.manager.remember import remember_approved, remember_site
 from webkiln_agents.manager.state import State
 from webkiln_agents.workers.errors import is_transient
 
@@ -55,6 +55,7 @@ def build_graph(
     builder.add_node("brand_review", brand_review)
     builder.add_node("manager_feedback", manager_feedback)
     builder.add_node("remember_approved", remember_approved)
+    builder.add_node("remember_site", remember_site)
     # LangGraph's type hints have no handler that takes `error: NodeError`, but it injects it.
     # Generation runs the same function and failure handling, with a longer timeout.
     for name, timeout in (("run_worker", WORKER_TIMEOUT), ("run_generate", GENERATE_TIMEOUT)):
@@ -93,6 +94,7 @@ def build_graph(
     builder.add_edge("run_generate", "review_failures")
     # Approval is the one way into the second half of the run, and it keeps what was approved.
     builder.add_edge("remember_approved", "dispatch")
+    builder.add_edge("remember_site", END)
     builder.add_edge("remember_edit", END)
 
     return builder.compile(checkpointer=checkpointer)

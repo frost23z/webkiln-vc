@@ -31,7 +31,7 @@ from langgraph.runtime import Runtime
 from langgraph.types import Command
 
 from webkiln_agents.manager.context import Context
-from webkiln_agents.manager.remember import Candidate, announce, clip, save
+from webkiln_agents.manager.remember import Candidate, announce, clip, save, site_candidates
 from webkiln_agents.manager.state import State
 from webkiln_agents.memory.prompt import memory_block
 from webkiln_agents.memory.records import Kind
@@ -390,7 +390,15 @@ async def remember_edit(state: State, runtime: Runtime[Context]) -> None:
         return
     change = state.site_changes[-1]
     text = clip(f"Edit to the site: {change['summary']} The user asked: {change['request']}")
-    kinds: list[Kind] = await save(memory, [Candidate(text, "decision", "user_said")])
+    candidates = [Candidate(text, "decision", "user_said")]
+    # The site now differs from what memory says when the brand or the structure changed.
+    try:
+        candidates += site_candidates(
+            _brand_name(state), change["cause"], change["brand"], change["wireframe"]
+        )
+    except ValueError:  # memory is best effort: the edit itself is already saved
+        logger.exception("the site could not be read for memory")
+    kinds: list[Kind] = await save(memory, candidates)
     announce("edit", kinds)
 
 

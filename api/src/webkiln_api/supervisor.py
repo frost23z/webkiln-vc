@@ -11,6 +11,7 @@ from webkiln_agents.manager.context import Context, run_config
 from webkiln_agents.manager.editing import EDIT_NODES, edit_command
 from webkiln_agents.manager.review import ReviewDecision
 from webkiln_agents.manager.state import State
+from webkiln_agents.memory.service import Memory
 
 from webkiln_api import store
 from webkiln_api.memory import MemoryFactory
@@ -81,6 +82,10 @@ class RunSupervisor:
 
     def is_running(self, thread_id: str) -> bool:
         return thread_id in self.channels
+
+    async def memory_for(self, thread_id: str) -> Memory | None:
+        """The memory of a run, or `None` when it has none."""
+        return (await self._context_for(thread_id)).memory
 
     async def _context_for(self, thread_id: str) -> Context:
         """The shared context with this run's memory: the user and the project it belongs to.

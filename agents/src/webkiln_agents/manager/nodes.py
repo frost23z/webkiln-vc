@@ -73,7 +73,7 @@ def worker_packet(task: Task, state: State) -> WorkerInput:
 
 def dispatch(
     state: State, runtime: Runtime[Context]
-) -> Command[Literal["run_worker", "run_generate", "brand_review", "__end__"]]:
+) -> Command[Literal["run_worker", "run_generate", "brand_review", "remember_site", "__end__"]]:
     """The scheduler. Marks every ready task `running` and starts them in one atomic step.
 
     The update and the `Send` objects are one result, so a crash cannot leave a task started but
@@ -90,6 +90,8 @@ def dispatch(
     if not ready:
         if awaiting_brand_review(state):
             return Command(goto="brand_review")
+        if any(t.agent == "generate" and t.status == "done" for t in state.tasks.values()):
+            return Command(goto="remember_site")  # the site is built: keep its architecture
         return Command(goto="__end__")  # END, written as a literal so the return type checks
     running = {
         task.id: task.model_copy(

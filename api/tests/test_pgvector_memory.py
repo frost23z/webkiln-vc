@@ -4,6 +4,7 @@ Embeddings are fakes (hashed words), so nothing is fetched. The store, its table
 index are the real ones. Every test uses its own user ids, because the store is not cleared.
 """
 
+import asyncio
 from collections.abc import AsyncGenerator, Generator
 from contextlib import contextmanager
 from uuid import uuid4
@@ -283,3 +284,43 @@ def test_the_browser_may_send_the_user_id() -> None:
 
     assert response.status_code == 200
     assert "x-user-id" in response.headers["access-control-allow-headers"].lower()
+
+
+def test_a_restore_puts_the_restored_brand_back_in_memory() -> None:
+    from test_editing import edit, edit_context, intent, say
+    from webkiln_agents.testing import FakeEditLLM
+
+    owner = user()
+    script = {
+        "manager:EditIntent": [intent("design_edit", "A darker green")],
+        "brand:DesignChange": [{"primary": "#0b3d2e", "rationale": "A deeper green."}],
+    }
+    context = edit_context(script)
+    context.llm = FakeEditLLM(script)
+    with TestClient(create_app(context, FakeEmbeddings())) as client:
+        headers = {"X-User-Id": owner}
+        thread_id = client.post("/runs", json=BRIEF, headers=headers).json()["thread_id"]
+        finish(client, thread_id)
+        client.post(f"/runs/{thread_id}/resume", json={"action": "approve"})
+        finish(client, thread_id)
+        original = SAMPLE_BRAND["palette"]["primary"].lower()
+
+        def brand_now() -> str:
+            async def read() -> str:
+                async with AsyncPostgresStore.from_conn_string(
+                    get_api_settings().DB_URL, index=index_config(FakeEmbeddings())
+                ) as pg:
+                    items = await pg.asearch(
+                        ("user", owner), filter={"slot": "brand", "status": "current"}
+                    )
+                    [item] = items
+                    return item.value["text"]
+
+            return asyncio.run(read())
+
+        assert f"primary {original}" in brand_now()
+        edit(client, thread_id, "Use a darker green", base_version=1)
+        assert "primary #0b3d2e" in brand_now()  # the edit replaced the approved brand
+        assert client.post(f"/runs/{thread_id}/versions/1/restore").status_code == 201
+        assert f"primary {original}" in brand_now()  # and the restore put it back
+        assert say(client, thread_id, "Hello").status_code == 202  # the run is not locked
