@@ -1,6 +1,7 @@
 from webkiln_agents.workers.base import Worker
 from webkiln_agents.workers.brand import brand_worker
 from webkiln_agents.workers.competitor import competitor_worker
+from webkiln_agents.workers.generate import generate_worker
 from webkiln_agents.workers.research import SPECS, research_worker
 from webkiln_agents.workers.wireframe import wireframe_worker
 
@@ -11,4 +12,5 @@ WORKERS: dict[str, Worker] = {
     "competitor": competitor_worker,
     "brand": brand_worker,
     "wireframe": wireframe_worker,
+    "generate": generate_worker,
 }

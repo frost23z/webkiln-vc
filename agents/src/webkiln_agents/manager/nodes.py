@@ -73,7 +73,7 @@ def worker_packet(task: Task, state: State) -> WorkerInput:
 
 def dispatch(
     state: State, runtime: Runtime[Context]
-) -> Command[Literal["run_worker", "brand_review", "__end__"]]:
+) -> Command[Literal["run_worker", "run_generate", "brand_review", "__end__"]]:
     """The scheduler. Marks every ready task `running` and starts them in one atomic step.
 
     The update and the `Send` objects are one result, so a crash cannot leave a task started but
@@ -100,7 +100,10 @@ def dispatch(
     # The packet is built from the task as it was before it started, so a task sent back for
     # rework still shows as `needs_rework` and gets its last answer. The worker sees `running`.
     sends = [
-        Send("run_worker", {**worker_packet(task, state), "task": running[task.id].model_dump()})
+        Send(
+            "run_generate" if task.agent == "generate" else "run_worker",
+            {**worker_packet(task, state), "task": running[task.id].model_dump()},
+        )
         for task in ready
     ]
     return Command(update={"tasks": running}, goto=sends)

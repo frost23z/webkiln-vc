@@ -27,6 +27,8 @@ WORKER_RETRY = RetryPolicy(
 )
 # One try may not run longer than this, including the time spent waiting for a rate limit.
 WORKER_TIMEOUT = TimeoutPolicy(run_timeout=300)
+# Generation writes every page and the pictures' notes, so it gets longer than a research worker.
+GENERATE_TIMEOUT = TimeoutPolicy(run_timeout=900)
 
 
 def build_graph(
@@ -46,13 +48,15 @@ def build_graph(
     builder.add_node("manager_feedback", manager_feedback)
     builder.add_node("remember_approved", remember_approved)
     # LangGraph's type hints have no handler that takes `error: NodeError`, but it injects it.
-    builder.add_node(  # pyrefly: ignore[no-matching-overload]
-        "run_worker",
-        run_worker,
-        retry_policy=worker_retry,
-        timeout=WORKER_TIMEOUT,
-        error_handler=mark_failed,
-    )
+    # Generation runs the same function and failure handling, with a longer timeout.
+    for name, timeout in (("run_worker", WORKER_TIMEOUT), ("run_generate", GENERATE_TIMEOUT)):
+        builder.add_node(  # pyrefly: ignore[no-matching-overload]
+            name,
+            run_worker,
+            retry_policy=worker_retry,
+            timeout=timeout,
+            error_handler=mark_failed,
+        )
 
     builder.add_edge(START, "process_initial_input")
     builder.add_edge("process_initial_input", "seed_tasks")
@@ -61,6 +65,7 @@ def build_graph(
     # A finished wave goes through `review_failures` (a worker that failed arrives there from
     # `mark_failed`). `dispatch` and `review_failures` choose their next step themselves.
     builder.add_edge("run_worker", "review_failures")
+    builder.add_edge("run_generate", "review_failures")
     # Approval is the one way into the second half of the run, and it keeps what was approved.
     builder.add_edge("remember_approved", "dispatch")
 
