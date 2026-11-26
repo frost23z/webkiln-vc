@@ -12,7 +12,7 @@ from webkiln_agents.manager.state import State
 from webkiln_api import store
 from webkiln_api.models import RunDetail, RunResponse, RunSummary, TaskReport, thread_config
 from webkiln_api.openapi import ERROR_RESPONSES
-from webkiln_api.site import without_files
+from webkiln_api.site import without_edit_files, without_files
 from webkiln_api.status import STUCK
 from webkiln_api.store import StoredRun
 from webkiln_api.streaming import finished_events
@@ -77,6 +77,7 @@ async def get_run(thread_id: str, request: Request) -> RunDetail:
     values = {k: v for k, v in snapshot.values.items() if k in State.model_fields}
     if "outputs" in values:  # the files of a site are served by the site routes, not the detail
         values["outputs"] = {task: without_files(out) for task, out in values["outputs"].items()}
+    values = without_edit_files(values)
     # What the user is asked to decide. It comes from the checkpoint, so a restart keeps it.
     review = snapshot.interrupts[0].value if snapshot.interrupts else None
     return RunDetail(

@@ -5,16 +5,17 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from webkiln_agents.core.schemas import Input
 from webkiln_agents.manager.plan import Task
 
 from webkiln_api.models import RunStatus, TaskReport
-from webkiln_api.site import GENERATE_AGENT, INITIAL_CAUSE, without_files
+from webkiln_api.site import GENERATE_AGENT, INITIAL_CAUSE, RESTORE_CAUSE, without_files
 from webkiln_api.tables import (
     BrandVersion,
+    ChatMessage,
     Project,
     Run,
     SiteFile,
@@ -110,6 +111,8 @@ async def sync_run(
     summaries: Mapping[str, str],
     outputs: Mapping[str, dict[str, Any]],
     reviews: Sequence[Mapping[str, Any]] = (),
+    site_changes: Sequence[Mapping[str, Any]] = (),
+    chat: Sequence[tuple[str, str]] = (),
 ) -> None:
     """Bring the run's rows in line with the graph state, in one transaction.
 
@@ -174,8 +177,17 @@ async def sync_run(
         for task_id, data in saved.items():
             if tasks[task_id].agent == GENERATE_AGENT and tasks[task_id].status == "done":
                 await _save_first_site(
-                    session, run_id, data, outputs.get("wireframe"), summaries.get(task_id, "")
+                    session,
+                    run_id,
+                    data,
+                    outputs.get("wireframe"),
+                    outputs.get("brand"),
+                    summaries.get(task_id, ""),
                 )
+        if site_changes:
+            await _save_site_changes(session, run_id, site_changes)
+        if chat:
+            await _save_chat(session, run_id, chat)
         if reviews:
             # A decision is never changed, so a repeat of the sync leaves the saved rows alone.
             await session.execute(
@@ -202,6 +214,7 @@ async def _save_first_site(
     run_id: Any,
     build: Mapping[str, Any],
     wireframe: Mapping[str, Any] | None,
+    brand: Mapping[str, Any] | None,
     summary: str,
 ) -> None:
     """Save what `generate` built as site version 1, with all its files.
@@ -217,6 +230,7 @@ async def _save_first_site(
         "parent_version": None,
         "cause": INITIAL_CAUSE,
         "summary": summary,
+        "brand": brand,
         "wireframe": wireframe,
         "copies": build["copies"],
         "images": build["images"],
@@ -227,6 +241,7 @@ async def _save_first_site(
             index_elements=["run_id", "version"],
             set_={
                 "summary": insert_version.excluded.summary,
+                "brand": insert_version.excluded.brand,
                 "wireframe": insert_version.excluded.wireframe,
                 "copies": insert_version.excluded.copies,
                 "images": insert_version.excluded.images,
@@ -244,16 +259,188 @@ async def _save_first_site(
     )
 
 
-async def site_files(sessions: Sessions, thread_id: str, version: int = 1) -> dict[str, str]:
-    """The files of a saved site version, by path."""
+async def _save_site_changes(
+    session: AsyncSession, run_id: Any, changes: Sequence[Mapping[str, Any]]
+) -> None:
+    """Save the versions that edits made: their inputs, and only the files that changed.
+
+    A saved version is never changed, so a repeat of the sync (or a version saved by an earlier
+    sync) leaves the rows alone. The files go in only with a version that was just inserted.
+    """
+    for change in changes:
+        inserted = await session.scalar(
+            insert(SiteVersion)
+            .values(
+                {
+                    "run_id": run_id,
+                    "version": change["version"],
+                    "parent_version": change["parent_version"],
+                    "cause": change["cause"],
+                    "summary": change["summary"],
+                    "brand": change["brand"],
+                    "wireframe": change["wireframe"],
+                    "copies": change["copies"],
+                    "images": change["images"],
+                }
+            )
+            .on_conflict_do_nothing(index_elements=["run_id", "version"])
+            .returning(SiteVersion.version)
+        )
+        if inserted is not None and change["changed"]:
+            await session.execute(
+                insert(SiteFile).values(
+                    [
+                        {
+                            "run_id": run_id,
+                            "version": change["version"],
+                            "path": path,
+                            "content": content,
+                        }
+                        for path, content in change["changed"].items()
+                    ]
+                )
+            )
+
+
+async def _save_chat(session: AsyncSession, run_id: Any, chat: Sequence[tuple[str, str]]) -> None:
+    """Copy the chat, keyed by its position in the graph's messages. A message never changes."""
+    await session.execute(
+        insert(ChatMessage)
+        .values(
+            [
+                {"run_id": run_id, "position": position, "role": role, "content": content}
+                for position, (role, content) in enumerate(chat)
+            ]
+        )
+        .on_conflict_do_nothing(index_elements=["run_id", "position"])
+    )
+
+
+@dataclass(frozen=True)
+class StoredVersion:
+    version: int
+    parent_version: int | None
+    cause: str
+    summary: str
+    created_at: datetime
+
+
+async def list_versions(sessions: Sessions, thread_id: str) -> list[StoredVersion]:
+    """The saved versions of a site, newest first."""
     async with sessions() as session:
         rows = await session.execute(
-            select(SiteFile.path, SiteFile.content)
-            .join(Run, Run.id == SiteFile.run_id)
-            .where(Run.thread_id == thread_id, SiteFile.version == version)
-            .order_by(SiteFile.path)
+            select(SiteVersion)
+            .join(Run, Run.id == SiteVersion.run_id)
+            .where(Run.thread_id == thread_id)
+            .order_by(SiteVersion.version.desc())
         )
-        return {row.path: row.content for row in rows}
+        return [
+            StoredVersion(v.version, v.parent_version, v.cause, v.summary, v.created_at)
+            for v in rows.scalars()
+        ]
+
+
+async def latest_version(sessions: Sessions, thread_id: str) -> int | None:
+    async with sessions() as session:
+        return await session.scalar(
+            select(func.max(SiteVersion.version))
+            .join(Run, Run.id == SiteVersion.run_id)
+            .where(Run.thread_id == thread_id)
+        )
+
+
+async def site_files(
+    sessions: Sessions, thread_id: str, version: int | None = None
+) -> dict[str, str]:
+    """The files of a saved site version, by path. `None` is the newest version.
+
+    A version holds only the files it changed, so the files come from walking back through its
+    parents and letting each newer version replace the older one. A version that does not exist
+    has no files.
+    """
+    async with sessions() as session:
+        run_id = await session.scalar(select(Run.id).where(Run.thread_id == thread_id))
+        if run_id is None:
+            return {}
+        rows = await session.execute(
+            select(SiteVersion.version, SiteVersion.parent_version, SiteVersion.cause).where(
+                SiteVersion.run_id == run_id
+            )
+        )
+        found = {row.version: (row.parent_version, row.cause) for row in rows}
+        current = max(found, default=None) if version is None else version
+        chain: list[int] = []  # newest first
+        while current is not None and current in found:
+            chain.append(current)
+            parent, cause = found[current]
+            # A restored version holds every file, so nothing before it counts: a file that
+            # a later version added and the restore dropped must not come back.
+            current = None if cause == RESTORE_CAUSE else parent
+        if not chain:
+            return {}
+        rows = await session.execute(
+            select(SiteFile.version, SiteFile.path, SiteFile.content).where(
+                SiteFile.run_id == run_id, SiteFile.version.in_(chain)
+            )
+        )
+        by_version = dict[int, dict[str, str]]()
+        for row in rows:
+            by_version.setdefault(row.version, {})[row.path] = row.content
+    files = dict[str, str]()
+    for number in reversed(chain):  # oldest first, so a newer file replaces an older one
+        files.update(by_version.get(number, {}))
+    return dict(sorted(files.items()))
+
+
+async def site_version_inputs(
+    sessions: Sessions, thread_id: str, version: int
+) -> dict[str, Any] | None:
+    """What a version was rendered from (brand, wireframe, copy and picture notes)."""
+    async with sessions() as session:
+        row = (
+            await session.execute(
+                select(SiteVersion)
+                .join(Run, Run.id == SiteVersion.run_id)
+                .where(Run.thread_id == thread_id, SiteVersion.version == version)
+            )
+        ).scalar_one_or_none()
+    if row is None:
+        return None
+    return {
+        "brand": row.brand,
+        "wireframe": row.wireframe,
+        "copies": row.copies,
+        "images": row.images,
+        "summary": row.summary,
+    }
+
+
+async def chat_history(sessions: Sessions, thread_id: str) -> list[tuple[str, str]]:
+    """The saved chat, oldest first, as `(role, text)`."""
+    async with sessions() as session:
+        rows = await session.execute(
+            select(ChatMessage.role, ChatMessage.content)
+            .join(Run, Run.id == ChatMessage.run_id)
+            .where(Run.thread_id == thread_id)
+            .order_by(ChatMessage.position)
+        )
+        return [(row.role, row.content) for row in rows]
+
+
+async def claim_edit(sessions: Sessions, thread_id: str) -> bool:
+    """The per-thread run lock: move a run from `completed` to `running` in one atomic update.
+
+    Of two chat messages at once, the database lets one UPDATE match the row, so the graph
+    handles one edit at a time. The loser gets `False` and is told the run is busy.
+    """
+    async with sessions.begin() as session:
+        claimed = await session.scalar(
+            update(Run)
+            .where(Run.thread_id == thread_id, Run.status == "completed")
+            .values(status="running")
+            .returning(Run.id)
+        )
+    return claimed is not None
 
 
 async def claim_resume(sessions: Sessions, thread_id: str, key: str | None) -> bool:

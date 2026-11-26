@@ -3,10 +3,12 @@ import logging
 from dataclasses import replace
 from typing import Any
 
+from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 from webkiln_agents.core.schemas import Input
 from webkiln_agents.manager.context import Context, run_config
+from webkiln_agents.manager.editing import edit_command
 from webkiln_agents.manager.review import ReviewDecision
 from webkiln_agents.manager.state import State
 
@@ -21,6 +23,16 @@ from webkiln_api.streaming import RunChannel, sse
 logger = logging.getLogger(__name__)
 
 type Graph = CompiledStateGraph[State, Context, Input, State]
+
+
+def chat_of(messages: list[AnyMessage]) -> list[tuple[str, str]]:
+    """The chat as `(role, text)`. Only what the user wrote and what the Manager answered."""
+    chat = list[tuple[str, str]]()
+    for message in messages:
+        if isinstance(message, HumanMessage | AIMessage):
+            text = message.content if isinstance(message.content, str) else str(message.content)
+            chat.append(("user" if isinstance(message, HumanMessage) else "assistant", text))
+    return chat
 
 
 class RunSupervisor:
@@ -54,9 +66,15 @@ class RunSupervisor:
         answer = decision.model_dump(mode="json", exclude_none=True)
         self._launch(thread_id, Command(resume=answer))
 
-    def _launch(self, thread_id: str, graph_input: dict[str, Any] | Command | None) -> None:
+    def send_message(self, thread_id: str, text: str, base_version: int | None) -> None:
+        """Hand a chat message to the finished thread. The graph enters at `edit_router`."""
+        self._launch(thread_id, edit_command(text, base_version), editing=True)
+
+    def _launch(
+        self, thread_id: str, graph_input: dict[str, Any] | Command | None, editing: bool = False
+    ) -> None:
         channel = self.channels[thread_id] = RunChannel()
-        task = asyncio.create_task(self._run(thread_id, graph_input, channel))
+        task = asyncio.create_task(self._run(thread_id, graph_input, channel, editing))
         self._tasks.add(task)  # the loop only keeps a weak reference to a task
         task.add_done_callback(self._tasks.discard)
 
@@ -80,7 +98,11 @@ class RunSupervisor:
         return replace(self.context, memory=None)
 
     async def _run(
-        self, thread_id: str, graph_input: dict[str, Any] | Command | None, channel: RunChannel
+        self,
+        thread_id: str,
+        graph_input: dict[str, Any] | Command | None,
+        channel: RunChannel,
+        editing: bool = False,
     ) -> None:
         config = run_config(self.context, thread_id)
         status: RunStatus = "failed"
@@ -109,7 +131,10 @@ class RunSupervisor:
         except Exception:
             # The 200 is already sent, so the failure travels as an event. Details stay in the log.
             logger.exception("Run %s failed", thread_id)
-            await self._save_status(thread_id, "failed")
+            # A message that broke the graph loses nothing: the site is as the last checkpoint
+            # saved it. The run stays finished, so the user can ask again, and does not become a
+            # failed run that no retry could fix.
+            await self._save_status(thread_id, "completed" if editing else "failed")
             channel.publish(sse("error", {"code": "run_failed", "message": "The run failed."}))
         else:
             channel.publish(sse("done", {"status": status}))
@@ -131,6 +156,8 @@ class RunSupervisor:
                 values.get("summaries", {}),
                 values.get("outputs", {}),
                 values.get("brand_reviews", []),
+                values.get("site_changes", []),
+                chat_of(values.get("messages", [])),
             )
         except Exception:
             logger.exception("Could not save the rows of run %s", thread_id)

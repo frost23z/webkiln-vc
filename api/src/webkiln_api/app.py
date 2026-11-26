@@ -17,8 +17,10 @@ from webkiln_api.context import build_context
 from webkiln_api.db import alembic_config, create_engine, create_session_factory
 from webkiln_api.errors import register_error_handlers
 from webkiln_api.memory import embeddings_from_settings, index_config, memory_factory
+from webkiln_api.preview import router as preview_router
 from webkiln_api.runs import router
 from webkiln_api.supervisor import RunSupervisor
+from webkiln_api.versions import router as site_router
 
 
 @asynccontextmanager
@@ -78,5 +80,7 @@ def create_app(context: Context | None = None, embeddings: Embeddings | None = N
     )
     register_error_handlers(app)
     app.include_router(router)
+    app.include_router(site_router)
+    app.include_router(preview_router)
 
     return app

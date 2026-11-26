@@ -107,6 +107,9 @@ class SiteVersion(Base):
     parent_version: Mapped[int | None]
     cause: Mapped[str]  # what made this version, such as "generate"
     summary: Mapped[str]
+    # The brand the pages were rendered with. A design edit changes it, so a restore needs it.
+    # Null on a version 1 saved before this column existed: the run's brand output is the same.
+    brand: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     wireframe: Mapped[dict[str, Any]] = mapped_column(JSONB)
     copies: Mapped[dict[str, Any]] = mapped_column(JSONB)
     images: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
@@ -127,3 +130,20 @@ class SiteFile(Base):
     version: Mapped[int] = mapped_column(primary_key=True)
     path: Mapped[str] = mapped_column(primary_key=True)
     content: Mapped[str] = mapped_column(Text)
+
+
+class ChatMessage(Base):
+    """One message of the chat about a finished site, as the user and the UI see it.
+
+    The row is a copy of the graph's `messages` (its position in that list is the key), made on
+    every sync. The model reads only the last turns and what long-term memory recalls, so this
+    table is the full text for the UI and the audit.
+    """
+
+    __tablename__ = "chat_messages"
+
+    run_id: Mapped[UUID] = mapped_column(ForeignKey("runs.id"), primary_key=True)
+    position: Mapped[int] = mapped_column(primary_key=True)
+    role: Mapped[str]  # "user" or "assistant"
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

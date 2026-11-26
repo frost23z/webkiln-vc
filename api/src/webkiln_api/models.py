@@ -1,7 +1,7 @@
 from typing import Any, Literal
 
 from langchain_core.runnables import RunnableConfig
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from webkiln_agents.core.schemas import Input
 
 RunStatus = Literal["running", "waiting", "completed", "failed"]
@@ -21,6 +21,32 @@ class RunDetail(RunResponse):
 class RunSummary(RunResponse):
     brief: Input
     updated_at: str  # ISO 8601 time of the run's last change
+
+
+class MessageRequest(BaseModel):
+    """A chat message about the finished site."""
+
+    message: str = Field(min_length=1, max_length=2000)
+    # The version the user is looking at. The edit is refused when the site has moved on.
+    base_version: int | None = Field(default=None, ge=1)
+
+
+class ChatEntry(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class VersionInfo(BaseModel):
+    version: int
+    parent_version: int | None
+    cause: str  # what made it: "generate", an edit intent such as "content_edit", or "restore"
+    summary: str
+    created_at: str  # ISO 8601
+
+
+class RestoreResponse(BaseModel):
+    version: int  # the new version, a copy of the one that was restored
+    restored_from: int
 
 
 class TaskReport(BaseModel):

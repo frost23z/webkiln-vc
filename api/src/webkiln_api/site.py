@@ -10,6 +10,7 @@ from typing import Any
 
 GENERATE_AGENT = "generate"
 INITIAL_CAUSE = "generate"
+RESTORE_CAUSE = "restore"  # a version that is a full copy of an older one
 
 
 def is_site_output(data: Any) -> bool:
@@ -24,6 +25,38 @@ def without_files(data: Mapping[str, Any]) -> dict[str, Any]:
     return {**{k: v for k, v in data.items() if k != "files"}, "file_paths": sorted(data["files"])}
 
 
+def _slim_site(site: Any) -> Any:
+    """The newest site (a `SiteHead`) with its files replaced by their paths."""
+    if isinstance(site, dict) and isinstance(site.get("files"), dict):
+        return {
+            **{k: v for k, v in site.items() if k != "files"},
+            "file_paths": sorted(site["files"]),
+        }
+    return site
+
+
+def _slim_changes(changes: Any) -> Any:
+    """The versions that edits made, with the changed files replaced by their paths."""
+    if not isinstance(changes, list):
+        return changes
+    return [
+        {**{k: v for k, v in c.items() if k != "changed"}, "paths": sorted(c["changed"])}
+        if isinstance(c, dict) and isinstance(c.get("changed"), dict)
+        else c
+        for c in changes
+    ]
+
+
+def without_edit_files(values: Mapping[str, Any]) -> dict[str, Any]:
+    """Graph state values with the files of the newest site and of each edit taken out."""
+    slim = dict(values)
+    if "site" in slim:
+        slim["site"] = _slim_site(slim["site"])
+    if "site_changes" in slim:
+        slim["site_changes"] = _slim_changes(slim["site_changes"])
+    return slim
+
+
 def strip_update(data: Any) -> Any:
     """An `updates` event of the graph, without the files of a site.
 
@@ -36,5 +69,7 @@ def strip_update(data: Any) -> Any:
         outputs = update.get("outputs") if isinstance(update, dict) else None
         if isinstance(outputs, dict) and any(is_site_output(o) for o in outputs.values()):
             update = {**update, "outputs": {t: without_files(o) for t, o in outputs.items()}}
+        if isinstance(update, dict) and ("site" in update or "site_changes" in update):
+            update = without_edit_files(update)
         cleaned[node] = update
     return cleaned
