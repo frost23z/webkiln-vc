@@ -1,8 +1,11 @@
 """Helpers shared by the tests of both packages. Nothing here calls a real model."""
 
+import re
+import zlib
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from langchain_core.embeddings import Embeddings
 from langchain_core.messages import BaseMessage
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
@@ -11,6 +14,7 @@ from pydantic import BaseModel
 from webkiln_agents.llm import LLMProvider
 from webkiln_agents.manager.catalog import CATALOG
 from webkiln_agents.manager.context import Context, run_config
+from webkiln_agents.memory.embeddings import EMBEDDING_DIMS, unit
 from webkiln_agents.workers.base import Worker, WorkerInput, WorkerResult
 
 SAMPLE_BRIEF = {
@@ -120,3 +124,28 @@ async def run_approved(
     while (await graph.aget_state(config)).interrupts:
         await graph.ainvoke(Command(resume=APPROVE), config, context=context)
     return (await graph.aget_state(config)).values
+
+
+class FakeEmbeddings(Embeddings):
+    """Embeddings from hashed words, so texts that share words are close and nothing is fetched.
+
+    The cosine of two texts is the share of words they have in common, which makes similarity
+    easy to set up in a test. `calls` counts the texts that were embedded.
+    """
+
+    def __init__(self, dims: int = EMBEDDING_DIMS) -> None:
+        self.dims = dims
+        self.calls = 0
+
+    def _vector(self, text: str) -> list[float]:
+        self.calls += 1
+        vector = [0.0] * self.dims
+        for word in set(re.findall(r"[a-z0-9#]+", text.casefold())):
+            vector[zlib.crc32(word.encode()) % self.dims] += 1.0
+        return unit(vector)
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self._vector(t) for t in texts]
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._vector(text)
