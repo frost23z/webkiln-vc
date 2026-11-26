@@ -84,7 +84,7 @@ def test_the_outline_shows_pages_with_their_sections() -> None:
         ),
         (
             lambda d: d["functional_requirements"].append(
-                {"kind": "search", "page": "blog", "description": "Search the whole blog"}
+                {"kind": "newsletter", "page": "blog", "description": "A newsletter sign-up form"}
             ),
             "unknown page 'blog'",
         ),

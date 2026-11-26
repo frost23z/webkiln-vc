@@ -1,0 +1,28 @@
+{% import "_macros.html.j2" as m %}
+<section class="section" id="{{ entry.section.id }}">
+  <div class="container split">
+    <div class="stack">
+      {{ m.heading(entry) }}
+      {{ m.paragraphs(entry.copy) }}
+      {% if entry.copy.items %}
+      <dl class="details">
+        {% for item in entry.copy.items %}
+        <dt>{{ item.title }}</dt>
+        <dd>{{ item.text }}</dd>
+        {% endfor %}
+      </dl>
+      {% endif %}
+      {% if "map" in needs %}
+      <a class="btn btn-secondary" href="{{ map_url }}">Open in maps</a>
+      {% endif %}
+    </div>
+    {% if "form" in needs %}
+    <form class="form" method="post" action="#">
+      <label class="field">Name<input type="text" name="name" autocomplete="name" required></label>
+      <label class="field">Email<input type="email" name="email" autocomplete="email" required></label>
+      <label class="field">Message<textarea name="message" rows="5" required></textarea></label>
+      <button class="btn btn-primary" type="submit">Send</button>
+    </form>
+    {% endif %}
+  </div>
+</section>

@@ -1,0 +1,24 @@
+{% macro buttons(section) %}
+{% if section.cta_primary or section.cta_secondary %}
+<div class="actions">
+  {% if section.cta_primary %}<a class="btn btn-primary" href="{{ href(section.cta_primary.target) }}">{{ section.cta_primary.label }}</a>{% endif %}
+  {% if section.cta_secondary %}<a class="btn btn-secondary" href="{{ href(section.cta_secondary.target) }}">{{ section.cta_secondary.label }}</a>{% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro media(image) %}
+<div class="media media--{{ image.aspect | replace(':', '-') }}" role="img" aria-label="{{ image.alt }}"></div>
+{% endmacro %}
+
+{% macro heading(entry) %}
+<{{ entry.heading_tag }}>{{ entry.copy.heading }}</{{ entry.heading_tag }}>
+{% if entry.copy.subheading %}<p class="lead">{{ entry.copy.subheading }}</p>{% endif %}
+{% endmacro %}
+
+{% macro paragraphs(copy) %}
+{% for paragraph in copy.paragraphs %}<p>{{ paragraph }}</p>
+{% endfor %}
+{% endmacro %}
+
+{% macro columns(count) %}{{ "grid-3" if count == 3 or count > 4 else "grid-2" }}{% endmacro %}

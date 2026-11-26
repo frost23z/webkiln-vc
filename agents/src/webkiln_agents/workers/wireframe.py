@@ -81,7 +81,7 @@ class PagePlan(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-FunctionKind = Literal["form", "booking_link", "newsletter", "map", "search"]
+FunctionKind = Literal["form", "booking_link", "newsletter", "map"]
 
 
 class FunctionalRequirement(BaseModel):
@@ -291,7 +291,7 @@ WIREFRAME_SPEC = ResearchSpec(
     "audience needs it answers (copied word for word from the audience report) and at most two "
     "buttons, each with a label and the slug of the page it opens. Also give the navigation (page "
     "slugs in menu order) and the functional requirements the brief implies (a form, a booking "
-    "link, a newsletter, a map or search), each tied to a page. The SEO landing pages must each "
+    "link, a newsletter or a map), each tied to a page. The SEO landing pages must each "
     "be a page, or a section titled with their name when the page limit leaves no room. A hero "
     "may only be the first section of a page.\n\nSection types:\n" + describe_vocabulary(),
     WireframeDraft,

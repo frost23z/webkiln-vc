@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ page.seo.title }}</title>
+<meta name="description" content="{{ page.seo.meta_description }}">
+<link rel="stylesheet" href="{{ fonts_url }}">
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/base.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="container site-header__inner">
+    <a class="brand" href="{{ href('index') }}">{{ brand_name }}</a>
+    <nav class="nav" aria-label="Main">
+      <ul class="nav__list">
+        {% for item in navigation %}
+        <li><a class="nav__link{% if item.slug == page.slug %} is-current{% endif %}" href="{{ href(item.slug) }}"{% if item.slug == page.slug %} aria-current="page"{% endif %}>{{ item.name }}</a></li>
+        {% endfor %}
+      </ul>
+    </nav>
+  </div>
+</header>
+<main id="main">
+{% for entry in sections %}
+{% include "sections/" ~ entry.section.type ~ ".html.j2" %}
+{% endfor %}
+{% if "newsletter" in needs %}
+<section class="section section--alt" id="{{ page.slug }}-newsletter">
+  <div class="container stack">
+    <h2>Stay in touch</h2>
+    <form class="form" method="post" action="#">
+      <label class="field">Email<input type="email" name="email" autocomplete="email" required></label>
+      <button class="btn btn-primary" type="submit">Subscribe</button>
+    </form>
+  </div>
+</section>
+{% endif %}
+</main>
+<footer class="site-footer">
+  <div class="container site-footer__inner">
+    <div>
+      <p><strong>{{ brand_name }}</strong></p>
+      <p>{{ tagline }}</p>
+    </div>
+    <nav aria-label="Footer">
+      <ul class="nav__list">
+        {% for item in navigation %}
+        <li><a class="nav__link" href="{{ href(item.slug) }}">{{ item.name }}</a></li>
+        {% endfor %}
+      </ul>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>

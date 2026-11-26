@@ -1,0 +1,16 @@
+{% import "_macros.html.j2" as m %}
+<section class="section" id="{{ entry.section.id }}">
+  <div class="container stack">
+    {{ m.heading(entry) }}
+    <div class="grid {{ m.columns(entry.copy.items | length) }}">
+      {% for item in entry.copy.items %}
+      <article class="card">
+        <{{ entry.item_tag }}>{{ item.title }}</{{ entry.item_tag }}>
+        <p class="card__meta">{{ item.meta }}</p>
+        <p>{{ item.text }}</p>
+      </article>
+      {% endfor %}
+    </div>
+    {{ m.buttons(entry.section) }}
+  </div>
+</section>

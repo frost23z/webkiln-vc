@@ -15,6 +15,7 @@ from webkiln_agents.llm import LLMProvider
 from webkiln_agents.manager.catalog import CATALOG
 from webkiln_agents.manager.context import Context, run_config
 from webkiln_agents.memory.embeddings import EMBEDDING_DIMS, unit
+from webkiln_agents.site.vocabulary import rule_for
 from webkiln_agents.workers.base import Worker, WorkerInput, WorkerResult
 
 SAMPLE_BRIEF = {
@@ -189,6 +190,37 @@ SAMPLE_WIREFRAME_DRAFT: dict[str, Any] = {
         },
     ],
 }
+
+
+def sample_copy(sections: Sequence[tuple[str, str, str]]) -> dict[str, Any]:
+    """Valid copy for a page, from its `(section id, type, title)` triples, whatever the types.
+
+    It holds exactly what each type's rule asks for, so the generate and API tests can share it.
+    """
+    out = []
+    for section_id, kind, title in sections:
+        rule = rule_for(kind)
+        count = rule.min_items if kind != "contact" else 2
+        items = [
+            {
+                "title": f"{title} {n + 1}" if kind != "contact" else ["Address", "Hours"][n],
+                "text": f"A clear sentence for item {n + 1} of {title}.",
+                **({"meta": f"Meta {n + 1}"} if rule.meta else {}),
+            }
+            for n in range(count)
+        ]
+        out.append(
+            {
+                "id": section_id,
+                "heading": title,
+                "subheading": f"A short line under {title}.",
+                "body": "First paragraph of the copy.\n\nSecond paragraph of the copy."
+                if rule.body
+                else None,
+                "items": items,
+            }
+        )
+    return {"sections": out}
 
 
 class FakeStructured[T: BaseModel]:

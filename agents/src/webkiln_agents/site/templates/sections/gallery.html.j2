@@ -1,0 +1,10 @@
+{% import "_macros.html.j2" as m %}
+<section class="section section--alt" id="{{ entry.section.id }}">
+  <div class="container stack">
+    {{ m.heading(entry) }}
+    <div class="grid grid-3">
+      {% for image in entry.images %}{{ m.media(image) }}{% endfor %}
+    </div>
+    {{ m.buttons(entry.section) }}
+  </div>
+</section>

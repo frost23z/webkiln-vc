@@ -1,0 +1,11 @@
+{% import "_macros.html.j2" as m %}
+<section class="section hero" id="{{ entry.section.id }}">
+  <div class="container split">
+    <div class="stack">
+      <h1>{{ entry.copy.heading }}</h1>
+      {% if entry.copy.subheading %}<p class="lead">{{ entry.copy.subheading }}</p>{% endif %}
+      {{ m.buttons(entry.section) }}
+    </div>
+    {% for image in entry.images %}{{ m.media(image) }}{% endfor %}
+  </div>
+</section>

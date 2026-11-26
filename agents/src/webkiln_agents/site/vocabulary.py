@@ -70,6 +70,12 @@ RULES: dict[SectionType, SectionRule] = {
     ),
 }  # fmt: skip
 
+
+def rule_for(kind: str) -> SectionRule:
+    """The rule of a section type given as text. An unknown type is a `KeyError`."""
+    return RULES[kind]  # pyrefly: ignore[bad-index]
+
+
 MAX_SECTIONS_PER_PAGE = 8
 MAX_PAGES = 5
 
