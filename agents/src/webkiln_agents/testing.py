@@ -270,10 +270,13 @@ class FakeSiteLLM:
         copies: dict[str, Any] | None = None,
         images: Any = None,
         slow: set[str] | None = None,
+        delays: Mapping[str, float] | None = None,
     ) -> None:
         self.copies = copies or sample_site_copy()
         self.images = images if images is not None else sample_image_plan()
         self.slow = slow or set()
+        self.delays = delays or {}  # seconds a page waits before it is answered
+        self.finished: list[str] = []  # page slugs in the order their calls were answered
         self.calls: Counter[str] = Counter()
         self.prompts: list[str] = []  # the text of every prompt, in the order the calls came
         self.answered: set[str] = set()
@@ -309,7 +312,9 @@ class _Call[T: BaseModel]:
         self.llm.calls[slug[1]] += 1
         if slug[1] in self.llm.slow:
             await asyncio.Event().wait()
+        await asyncio.sleep(self.llm.delays.get(slug[1], 0))
         answer = self.schema.model_validate(self.llm.copies[slug[1]])
+        self.llm.finished.append(slug[1])
         self._answered(slug[1])
         return answer
 

@@ -57,6 +57,14 @@ async def test_it_builds_every_page_with_one_call_each_and_one_for_the_pictures(
     assert check_site(site.files, WIREFRAME) == []
 
 
+async def test_pages_are_merged_in_wireframe_order_not_completion_order() -> None:
+    llm = FakeSiteLLM(delays={"index": 0.1, "rooms": 0.05})  # the first pages finish last
+    site = await build(llm)
+    assert llm.finished.index("index") > llm.finished.index("contact")
+    assert site.pages == ["index", "rooms", "offers", "contact"]
+    assert list(site.copies) == site.pages
+
+
 async def test_the_output_keeps_the_copy_and_the_picture_notes_for_later_edits() -> None:
     site = await build(FakeSiteLLM())
     assert site.copies["rooms"] == PageCopy.model_validate(COPIES["rooms"])
